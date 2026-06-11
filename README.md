@@ -1,64 +1,30 @@
 # 🏆 America's Cup Cagliari – Tourist Impact Analysis
 
-> Analisi dell'impatto turistico dell'America's Cup 2025 a Cagliari attraverso text mining, topic modeling e sentiment analysis su dati estratti da piattaforme online.
+> Analisi dell'impatto turistico dell'America's Cup 2026 a Cagliari attraverso text mining, topic modeling e sentiment analysis su dati estratti da piattaforme online.
 
 ---
 
 ## 📋 Descrizione del Progetto
 
-Il progetto mira a misurare e quantificare l'impatto dell'**America's Cup 2025** sul turismo a Cagliari, analizzando recensioni e contenuti testuali estratti da piattaforme online in tre finestre temporali distinte. I risultati vengono confrontati con la baseline dell'anno precedente e con una città di controllo (**Olbia**).
+Il progetto mira a misurare e quantificare l'impatto dell'**America's Cup 2026** sul turismo a Cagliari, analizzando recensioni e contenuti testuali estratti da piattaforme online in tre finestre temporali distinte. I risultati vengono confrontati con la baseline dell'anno precedente e con una città di controllo (**Olbia**).
 
 ---
 
 ## 🗓️ Finestre Temporali
 
-| Fase              | Periodo                  |
-|-------------------|--------------------------|
-| Pre-evento        | 1 aprile – 20 maggio 2025 |
-| Durante evento    | 20 maggio – 24 maggio 2025 |
-| Post-evento       | 24 maggio – 15 giugno 2025 |
-| Baseline 2024     | Stesse finestre, anno precedente |
+| Fase               | Periodo                          |
+|--------------------|----------------------------------|
+| Pre-evento         | 1 aprile – 20 maggio 2026        |
+| Durante evento     | 21 maggio – 24 maggio 2026       |
+| Post-evento        | 25 maggio – 15 giugno 2026       |
+| Baseline 2025      | Stesse finestre, anno precedente |
 | Città di controllo | Olbia (stessa finestra, nessun evento) |
 
 ---
 
 ## 🌐 Fonti Dati
 
-Le fonti sono ordinate per priorità:
-
-### Priorità 1 – Piattaforme turistiche
-- **Booking.com** – recensioni alloggi
-- **Airbnb** – recensioni alloggi
-- **TripAdvisor** – ristoranti, attrazioni, hotel
-- **Google Maps** – alloggi, ristoranti, monumenti, spiagge
-
-### Priorità 2 – Social & Community
-- **Reddit** – subreddit legati a Cagliari e America's Cup
-- **Social Media** (Facebook, Instagram)
-
-### Priorità 3 – Stampa locale *(fallback)*
-- Articoli e commenti di testate locali sarde
-
----
-
-## 🔧 Pipeline di Lavoro
-
-```
-Fase 1: Estrazione Dati
-    └── Crawler Selenium (giornaliero, per 30 giorni)
-
-Fase 2: Preprocessing
-    └── Pulizia, normalizzazione, tokenizzazione
-
-Fase 3: Analisi NLP
-    ├── Topic Modeling (LDA / BERTopic)
-    └── Sentiment & Emotion Analysis
-
-Fase 4: Analisi Comparativa
-    ├── Confronto con baseline 2024
-    ├── Confronto con Olbia (città di controllo)
-    └── Analisi volumetrica recensioni
-```
+- **Booking.com** – recensioni alloggi (scraper Selenium)
 
 ---
 
@@ -67,32 +33,26 @@ Fase 4: Analisi Comparativa
 ```
 project/
 │
-├── scraper/                  # Script di estrazione dati
-│   ├── booking_scraper.py
-│   ├── airbnb_scraper.py
-│   ├── tripadvisor_scraper.py
-│   ├── googlemaps_scraper.py
-│   └── utils/
-│       └── selenium_helpers.py
+├── booking_scraper_cagliari.py   # Scraper Booking.com per Cagliari
+├── booking_scraper_olbia.py      # Scraper Booking.com per Olbia
 │
 ├── data/
-│   ├── raw/                  # Dati grezzi estratti
-│   ├── processed/            # Dati preprocessati
-│   └── baselines/            # Dati anno precedente (2024)
+│   ├── raw/                      # CSV grezzi estratti dagli scraper
+│   ├── processed/                # CSV processati dalla pipeline
+│   └── baselines/                # Dati baseline anno precedente (2025)
 │
 ├── analysis/
-│   ├── preprocessing.py      # Pulizia e normalizzazione testo
-│   ├── topic_modeling.py     # LDA / BERTopic
-│   ├── sentiment_analysis.py # Sentiment & Emotion Analysis
-│   └── comparative.py        # Analisi comparativa finale
+│   ├── config.py                 # Finestre temporali, città, path cartelle
+│   ├── utils.py                  # Parsing date italiane, assegnazione finestre
+│   ├── preprocessing.py          # Pulizia testo, lemmatizzazione, feature engineering
+│   ├── sentiment_analysis.py     # Sentiment & Emotion Analysis (Feel-IT / VADER)
+│   ├── topic_modeling.py         # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
+│   ├── comparative.py            # Analisi comparativa finale, summary report
+│   └── validation.py             # Validazione modelli NLP su benchmark pubblici
 │
-├── notebooks/                # Jupyter Notebooks esplorativi
-│   ├── 01_eda.ipynb
-│   ├── 02_topic_modeling.ipynb
-│   └── 03_sentiment.ipynb
+├── results/                      # Output grafici, aggregazioni, report
 │
-├── results/                  # Output grafici e report
-│
+├── CLAUDE.md                     # Contesto progetto per Claude Code
 ├── requirements.txt
 └── README.md
 ```
@@ -124,8 +84,16 @@ pandas
 nltk
 spacy
 transformers
+datasets
 bertopic
+sentence-transformers
 scikit-learn
+vaderSentiment
+langdetect
+textblob
+tqdm
+pyldavis
+wordcloud
 matplotlib
 seaborn
 ```
@@ -134,43 +102,82 @@ seaborn
 
 ## 🚀 Utilizzo
 
-### 1. Eseguire lo scraper (consigliato: cron job giornaliero)
+### 1. Eseguire gli scraper
 
 ```bash
-python scraper/booking_scraper.py --city cagliari --start 2025-04-01 --end 2025-06-15
-python scraper/booking_scraper.py --city olbia --start 2025-04-01 --end 2025-06-15
+python booking_scraper_cagliari.py
+python booking_scraper_olbia.py
 ```
 
-> ⚠️ **Nota**: Gli scraper usano `time.sleep()` tra le richieste per evitare blocchi. Se il sito inizia a bloccare le richieste, aumentare l'intervallo di pausa nei parametri dello script.
+> ⚠️ **Nota**: Modificare `DATE_FROM` e `DATE_TO` nello script per cambiare il range di raccolta. Gli scraper supportano il checkpoint automatico: se interrotti, riprendono dalla struttura successiva.
 
-### 2. Preprocessing
+### 2. Validazione modelli NLP (opzionale ma consigliato)
 
 ```bash
-python analysis/preprocessing.py --input data/raw/ --output data/processed/
+python -m analysis.validation
+python -m analysis.validation --max-samples 50   # test rapido
 ```
 
-### 3. Analisi NLP
+### 3. Preprocessing
 
 ```bash
-python analysis/topic_modeling.py
-python analysis/sentiment_analysis.py
+python -m analysis.preprocessing
+python -m analysis.preprocessing --sample 100   # test rapido
 ```
 
-### 4. Analisi comparativa
+### 4. Sentiment & Emotion Analysis
 
 ```bash
-python analysis/comparative.py
+python -m analysis.sentiment_analysis
+python -m analysis.sentiment_analysis --sample 100   # test rapido
+```
+
+### 5. Topic Modeling
+
+```bash
+python -m analysis.topic_modeling
+python -m analysis.topic_modeling --sample 200 --no-gridsearch   # test rapido
+```
+
+### 6. Analisi Comparativa
+
+```bash
+python -m analysis.comparative
+```
+
+---
+
+## 🔧 Pipeline Completa
+
+```
+Fase 1: Estrazione Dati
+    ├── booking_scraper_cagliari.py
+    └── booking_scraper_olbia.py
+
+Fase 2: Validazione Modelli (opzionale)
+    └── analysis/validation.py
+
+Fase 3: Preprocessing
+    └── analysis/preprocessing.py
+
+Fase 4: Analisi NLP
+    ├── analysis/sentiment_analysis.py   (Feel-IT / VADER / DistilRoBERTa)
+    └── analysis/topic_modeling.py       (LDA + BERTopic)
+
+Fase 5: Analisi Comparativa
+    └── analysis/comparative.py
 ```
 
 ---
 
 ## 📊 Output Attesi
 
-- **Distribuzione dei topic** per fonte e finestra temporale
-- **Sentiment score medio** per topic (positivo / negativo / neutro)
-- **Emozioni prevalenti** per periodo (gioia, sorpresa, frustrazione, ecc.)
-- **Variazione volumetrica** delle recensioni rispetto al 2024
+- **Distribuzione dei topic** per finestra temporale e città
+- **Sentiment score medio** per finestra temporale (2026 vs baseline 2025)
+- **Emozioni prevalenti** per periodo (gioia, tristezza, rabbia, paura, ecc.)
+- **Variazione volumetrica** delle recensioni rispetto al 2025
 - **Confronto Cagliari vs Olbia** per stesso periodo
+- **Visualizzazioni**: pyLDAvis interattivo, WordCloud, confusion matrix, log-likelihood curves
 
 ## 📝 Deliverable Finali
 
@@ -183,13 +190,13 @@ python analysis/comparative.py
 
 - **PCA** – riduzione dimensionale per visualizzare cluster di topic/sentimenti
 - **SVM** – classificazione supervisionata del sentiment
-- Integrazione con ~4000 interviste sul campo (pre/post evento) per validazione
+- Integrazione con interviste sul campo (pre/post evento) per validazione
 
 ---
 
 ## 👤 Autore
 
-Progetto universitario Matteo Cambarau– Esame di Web Analytics e Analisi Testuale 
+Progetto universitario Matteo Cambarau – Esame di Web Analytics e Analisi Testuale
 
 Supervisor: *Professor Marco Ortu*  
 Anno Accademico: 2025/2026
