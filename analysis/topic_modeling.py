@@ -589,15 +589,18 @@ def aggregate_by_window(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def aggregate_by_city(df: pd.DataFrame) -> pd.DataFrame:
-    """Topic distributions for both LDA and BERTopic, grouped by property_city."""
-    frames = [df[["property_city"]].drop_duplicates()] if "property_city" in df.columns else []
+    """Topic distributions for both LDA and BERTopic, grouped by city."""
+    city_col = "property_city" if "property_city" in df.columns else ("city" if "city" in df.columns else None)
+    if city_col is None:
+        return pd.DataFrame()
+    frames = [df[[city_col]].drop_duplicates()]
     for prefix in ("positive", "negative"):
         for model in ("lda", "bertopic"):
             col = f"{model}_topic_{prefix}"
             if col in df.columns:
-                dist = _distribution(df, "property_city", col)
+                dist = _distribution(df, city_col, col)
                 if not dist.empty:
-                    frames.append(dist.set_index("property_city"))
+                    frames.append(dist.set_index(city_col))
 
     if not frames:
         return pd.DataFrame()
@@ -622,12 +625,12 @@ def run_subset_visualisations(df: pd.DataFrame) -> None:
     Skips any subset with fewer than MIN_DOCS_PYLDAVIS valid documents.
     All errors are caught per-subset so the pipeline never aborts.
     """
-    city_col = "property_city"
+    city_col = "property_city" if "property_city" in df.columns else ("city" if "city" in df.columns else None)
     window_col = "temporal_window"
     pos_col = TEXT_COLS["positive"]
     neg_col = TEXT_COLS["negative"]
 
-    if city_col not in df.columns or window_col not in df.columns:
+    if city_col is None or window_col not in df.columns:
         log.warning("City or window column missing — skipping subset visualisations.")
         return
 

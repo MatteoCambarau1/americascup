@@ -458,8 +458,8 @@ def build_summary_report(
     lines += ["", "─" * 70, "2. SENTIMENT — 2026 vs 2025 BASELINE", "─" * 70]
     if not sent_win.empty:
         for _, row in sent_win.iterrows():
-            city = row.get("property_city", "all")
-            window = row.get("window", "?")
+            city = row.get("property_city") or "all"
+            window = row.get("window") or "?"
             ms26 = row.get("mean_sentiment_2026")
             ms25 = row.get("mean_sentiment_2025")
             delta = row.get("pct_change_mean_sentiment")
@@ -537,6 +537,9 @@ def run_pipeline() -> dict[str, pd.DataFrame]:
     Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
     df = load_data()
+    # Normalise column names: scraper outputs 'city', schema expects 'property_city'
+    if "city" in df.columns and "property_city" not in df.columns:
+        df["property_city"] = df["city"].str.title()
 
     steps = [
         ("volumetric",       volumetric_analysis),

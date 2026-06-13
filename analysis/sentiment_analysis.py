@@ -152,6 +152,9 @@ def sentiment_feel_it(
         batch = [t if t.strip() else " " for t in batch]
         preds = pipeline(batch, truncation=True, max_length=MAX_TOKEN_LEN)
         for pred in preds:
+            # top_k=1 returns [[{...}]] in newer transformers; normalise to {…}
+            if isinstance(pred, list):
+                pred = pred[0]
             label = _hf_label_to_standard(pred["label"])
             score = round(pred["score"], 4)
             # Convert score to signed: negative → negate
@@ -202,6 +205,80 @@ def emotion_hf(
 
 
 # ---------------------------------------------------------------------------
+# Feel-IT compatibility patches for transformers 5.x
+# ---------------------------------------------------------------------------
+
+_FEEL_IT_MODELS = {
+    "MilaNLProc/feel-it-italian-sentiment",
+    "MilaNLProc/feel-it-italian-emotion",
+}
+
+_PATCHES_DIR = Path(__file__).parent / "patches"
+
+
+def _patch_camembert_tokenizer() -> None:
+    """
+    Monkey-patch CamemBERT tokenizer for transformers 5.x compatibility.
+
+    In transformers 5.x the CamemBERT fast tokenizer tries to unpack each
+    vocabulary entry as a 2-tuple (token, score), but SentencePiece produces
+    3-tuples (token, score, type).  The patch normalises the vocab to 2-tuples
+    and handles the case where the vocab arrives as a plain dict {token: id}.
+    """
+    try:
+        from transformers.models.camembert import tokenization_camembert as _tc
+        original_init = _tc.CamembertTokenizer.__init__
+
+        def _patched_init(self, *args, vocab=None, **kwargs):
+            if vocab is not None:
+                if isinstance(vocab, dict):
+                    vocab = list(vocab.items())
+                else:
+                    vocab = [(e[0], e[1]) for e in vocab]
+            original_init(self, *args, vocab=vocab, **kwargs)
+
+        if not getattr(_tc.CamembertTokenizer.__init__, "_feel_it_patched", False):
+            _tc.CamembertTokenizer.__init__ = _patched_init
+            _tc.CamembertTokenizer.__init__._feel_it_patched = True
+    except Exception:
+        pass
+
+
+def _ensure_feel_it_tokenizer(model_id: str) -> None:
+    """
+    Copy the repo-patched tokenizer.json into the HuggingFace cache for
+    *model_id* if the cached copy is missing the required 'type' field.
+
+    This makes the fix venv- and cache-independent: the corrected file lives
+    in analysis/patches/ and is applied on first use.
+    """
+    patch_file = _PATCHES_DIR / "feel_it_tokenizer.json"
+    if not patch_file.exists():
+        return
+
+    try:
+        import json
+        from huggingface_hub import hf_hub_download
+
+        cached = hf_hub_download(model_id, "tokenizer.json")
+        with open(cached) as f:
+            data = json.load(f)
+
+        if data.get("model", {}).get("type") != "Unigram":
+            import shutil
+            shutil.copy(patch_file, cached)
+            log.info("Applied Feel-IT tokenizer patch → %s", cached)
+    except Exception:
+        pass
+
+
+def _apply_feel_it_patches(model_id: str) -> None:
+    _patch_camembert_tokenizer()
+    if model_id in _FEEL_IT_MODELS:
+        _ensure_feel_it_tokenizer(model_id)
+
+
+# ---------------------------------------------------------------------------
 # Model loader — lazy, cached
 # ---------------------------------------------------------------------------
 
@@ -212,6 +289,7 @@ def _get_pipeline(model_id: str, task: str = "text-classification"):
     """Load a HuggingFace pipeline once and cache it in memory."""
     if model_id in _model_cache:
         return _model_cache[model_id]
+    _apply_feel_it_patches(model_id)
     from transformers import pipeline as hf_pipeline
     log.info("Loading model: %s …", model_id)
     pipe = hf_pipeline(
@@ -426,26 +504,29 @@ def aggregate_by_city(df: pd.DataFrame) -> pd.DataFrame:
     Mean sentiment score and emotion distribution per property_city.
     Returns one row per city.
     """
-    if "property_city" not in df.columns:
-        log.warning("Column 'property_city' not found — skipping city aggregation.")
+    city_col = "property_city" if "property_city" in df.columns else ("city" if "city" in df.columns else None)
+    if city_col is None:
+        log.warning("Column 'property_city'/'city' not found — skipping city aggregation.")
         return pd.DataFrame()
 
     df["sentiment_score"] = pd.to_numeric(df["sentiment_score"], errors="coerce")
 
     sentiment_agg = (
-        df.groupby("property_city")["sentiment_score"]
+        df.groupby(city_col)["sentiment_score"]
         .agg(mean_sentiment="mean", review_count="count")
         .reset_index()
+        .rename(columns={city_col: "property_city"})
     )
 
     emotion_dist = (
-        df.groupby(["property_city", "emotion_label"])
+        df.groupby([city_col, "emotion_label"])
         .size()
         .reset_index(name="emotion_count")
-        .pivot(index="property_city", columns="emotion_label", values="emotion_count")
+        .pivot(index=city_col, columns="emotion_label", values="emotion_count")
         .fillna(0)
         .add_prefix("emotion_")
         .reset_index()
+        .rename(columns={city_col: "property_city"})
     )
 
     return sentiment_agg.merge(emotion_dist, on="property_city", how="left")

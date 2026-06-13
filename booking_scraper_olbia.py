@@ -37,8 +37,8 @@ MAX_REVIEW_PAGES = 10000   # pagine recensioni per struttura  ← test: veloce
 # ── Filtro date ────────────────────────────────
 # Modifica questi valori per cambiare il range di raccolta.
 # Formato: "YYYY-MM-DD"  |  None = nessun limite
-DATE_FROM = "2026-05-21"   # includi recensioni da questa data
-DATE_TO   = "2026-05-24"   # includi recensioni fino a questa data
+DATE_FROM = "2026-05-25"   # includi recensioni da questa data
+DATE_TO   = "2026-06-15"   # includi recensioni fino a questa data
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -160,7 +160,7 @@ def dismiss_cookie_banner(driver):
     for sel in selectors:
         try:
             btn = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.CSS_SELECTOR, sel)))
-            btn.click()
+            driver.execute_script("arguments[0].click();", btn)
             print("  🍪 Banner cookie chiuso.")
             time.sleep(1)
             return

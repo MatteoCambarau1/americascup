@@ -6,7 +6,8 @@ recensioni scrappate da piattaforme online. Progetto universitario UniCA, DSBAI.
 
 ## Struttura repository
 ```
-booking_scraper_olbia.py    # scraper Selenium per Booking.com (Olbia)
+booking_scraper_olbia.py    # scraper Selenium per Booking.com (Olbia) — COMPLETATO
+booking_scraper_cagliari.py # scraper Selenium per Booking.com (Cagliari) — COMPLETATO
 analysis/
 ├── config.py               # finestre temporali, città, sorgenti, path cartelle
 ├── utils.py                # parse_italian_date(), assign_temporal_window()
@@ -14,11 +15,11 @@ analysis/
 ├── sentiment_analysis.py   # Feel-IT / VADER / DistilRoBERTa, aggregazioni
 ├── topic_modeling.py       # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
 ├── comparative.py          # analisi comparativa finale, summary_report.txt
+├── exploratory.py          # analisi temporale descrittiva (box plot, confronto 2026 vs 2025)
 └── validation.py           # valida i modelli NLP su benchmark pubblici
 data/
-├── raw/                    # CSV grezzi scrappati (input pipeline)
-├── processed/              # CSV processati (output preprocessing/sentiment/topics)
-└── baselines/              # (riservato per dati baseline 2025)
+├── raw/                    # CSV grezzi scrappati (9 file, 15509 recensioni totali)
+└── processed/              # CSV processati (output preprocessing/sentiment/topics)
 results/                    # output finali (aggregazioni, grafici, report)
 ```
 
@@ -40,19 +41,34 @@ booking
 reviewer_country, rating, review_title, text_positive, text_negative,
 stay_type, nights_stayed, scrape_source`
 
-## Scraper esistente (booking_scraper_olbia.py)
-- Piattaforma: Booking.com
-- Città configurata: **Olbia** (manca ancora Cagliari)
-- Stato: **scraping in corso** — non tutti i CSV sono ancora disponibili
+## Scraper (booking_scraper_olbia.py / booking_scraper_cagliari.py)
+- Piattaforma: Booking.com — **scraping completato** per entrambe le città
+- CSV disponibili in `data/raw/`: Cagliari (pre/during/post 2025 e 2026), Olbia (pre/during/post 2026)
+- Baseline Olbia 2025: **non raccolta** (decisione progettuale)
 - Colonne output scraper: `city, source, property, property_stars, scraped_at,
   review_date, rating, review_title, stay_type, nights_stayed, text_positive,
   text_negative, reviewer, reviewer_country`
 - **Differenze rispetto allo schema atteso**: `city`→`property_city`,
   `source`→`scrape_source`, `property`→`property_name`
 - **Decisione presa**: NON rinominare le colonne ora, NON ri-scrapare.
-  `preprocessing.py` gestisce silenziosamente le colonne mancanti/diverse.
+  La normalizzazione avviene nei singoli script di analisi (alias `city` → `property_city`
+  con `.str.title()` per il case matching con config.py).
 - `stay_date` non estratta dallo scraper → lasciata NaN, non impatta l'analisi
   (assign_temporal_window usa review_date)
+
+## Stato pipeline (aggiornato 2026-06-13)
+Tutti gli step completati con successo su 15509 recensioni.
+
+## Output exploratory.py
+Analisi temporale descrittiva — 4 file in `results/exploratory/`:
+- `temporal_rating_boxplot.png` — box plot rating per finestra (pre/during/post) × città
+- `temporal_sentiment_boxplot.png` — box plot sentiment score per finestra × città
+- `temporal_cagliari_2026_vs_2025.png` — confronto bar chart 2026 vs baseline 2025 (rating + sentiment)
+- `temporal_summary.csv` — tabella aggregata (n, media, std) per city × window
+
+**Nota**: gli `n` nel CSV sono righe del dataset merged (espanso dal join topic), non recensioni uniche.
+PCA, K-Means e SVM sono stati rimossi: class imbalance pre/during/post (93k vs 6k vs 10k)
+rendeva la classificazione temporale non interpretabile.
 
 ## Ordine di esecuzione pipeline
 ```bash
@@ -62,8 +78,9 @@ python -m analysis.validation
 # Pipeline principale
 python -m analysis.preprocessing
 python -m analysis.sentiment_analysis
-python -m analysis.topic_modeling
+python -m analysis.topic_modeling --no-gridsearch
 python -m analysis.comparative
+python -m analysis.exploratory
 ```
 
 ## Dipendenze principali
@@ -76,6 +93,11 @@ python -m spacy download it_core_news_sm
 python -m spacy download en_core_web_sm
 ```
 
+## Dipendenze aggiuntive installate
+```bash
+pip install beautifulsoup4 sentencepiece
+```
+
 ## Note importanti
 - Ottimizzato per **Apple M2 8GB RAM**: batch_size=8, device=-1 (CPU), no MPS
 - Tutti gli script supportano `--sample N` per testare su un sottoinsieme
@@ -83,3 +105,22 @@ python -m spacy download en_core_web_sm
 - I modelli HuggingFace usati: `MilaNLProc/feel-it-italian-sentiment`,
   `MilaNLProc/feel-it-italian-emotion`, `j-hartmann/emotion-english-distilroberta-base`
 - BERTopic usa `paraphrase-multilingual-MiniLM-L12-v2` (multilingua, ~120MB)
+
+## Bug fix Feel-IT (transformers 5.x)
+Feel-IT (MilaNLProc) è incompatibile con transformers 5.x. Le fix sono **permanenti nel codice**,
+non dipendono dallo stato del venv o della cache HuggingFace:
+
+1. **Monkey-patch CamemBERT** — applicato a runtime in `sentiment_analysis.py`
+   (`_patch_camembert_tokenizer()`): normalizza la vocab da 3-tuple a 2-tuple prima
+   del caricamento, senza toccare file del venv.
+2. **`tokenizer.json` corretto** — salvato in `analysis/patches/feel_it_tokenizer.json`
+   e copiato automaticamente in cache da `_ensure_feel_it_tokenizer()` al primo avvio,
+   se il file in cache non ha il campo `"type": "Unigram"`.
+
+Entrambe le funzioni vengono chiamate da `_get_pipeline()` prima di caricare qualsiasi
+modello Feel-IT. **Nessuna azione manuale richiesta dopo pip install o cache svuotata.**
+
+## Normalizzazione colonne city
+Il scraper produce `city` (minuscolo) ma `config.py` usa `TARGET_CITY = "Cagliari"` (title case).
+La normalizzazione avviene in `comparative.py` con `df["property_city"] = df["city"].str.title()`.
+`sentiment_analysis.py` e `topic_modeling.py` gestiscono il fallback `city`/`property_city` internamente.
