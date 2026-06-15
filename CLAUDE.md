@@ -16,11 +16,20 @@ analysis/
 ├── topic_modeling.py       # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
 ├── comparative.py          # analisi comparativa finale, summary_report.txt
 ├── exploratory.py          # analisi temporale descrittiva (box plot, confronto 2026 vs 2025)
-└── validation.py           # valida i modelli NLP su benchmark pubblici
+├── validation.py           # valida i modelli NLP su benchmark pubblici esterni — INFRASTRUTTURA PRONTA, NON ESEGUITA
+├── generate_gold_standard.py # campiona 150 recensioni Cagliari per annotazione manuale (gold standard)
+├── empirical_validation.py # valida Feel-IT e nlptown sul gold standard annotato — ESEGUITO
+└── patches/
+    └── feel_it_tokenizer.json # fix tokenizer Feel-IT per transformers 5.x
 data/
 ├── raw/                    # CSV grezzi scrappati (9 file, 15509 recensioni totali)
 └── processed/              # CSV processati (output preprocessing/sentiment/topics)
+validation/
+├── gold_standard_da_annotare.csv # template generato da generate_gold_standard.py
+└── outputs/                # risultati empirical_validation.py (confusion matrix, classification report, confronto_modelli.csv)
 results/                    # output finali (aggregazioni, grafici, report)
+report_tecnico.md           # report tecnico completo (11 sezioni) — fonte canonica
+report_tecnico.docx         # report tecnico in formato Word, generato da report_tecnico.md
 ```
 
 ## Finestre temporali (config.py)
@@ -56,8 +65,14 @@ stay_type, nights_stayed, scrape_source`
 - `stay_date` non estratta dallo scraper → lasciata NaN, non impatta l'analisi
   (assign_temporal_window usa review_date)
 
-## Stato pipeline (aggiornato 2026-06-13)
+## Stato pipeline (aggiornato 2026-06-15)
 Tutti gli step completati con successo su 15509 recensioni.
+
+Validazione empirica in-domain completata (2026-06-15): confronto Feel-IT vs
+`nlptown/bert-base-multilingual-uncased-sentiment` su gold standard da 150 recensioni
+annotate manualmente. Risultati e interpretazione critica in `report_tecnico.md`,
+sezione 9 (Validazione empirica). `analysis/validation.py` (benchmark esterni per
+VADER e modelli di emozione) resta non eseguito.
 
 ## Output exploratory.py
 Analisi temporale descrittiva — 4 file in `results/exploratory/`:
@@ -69,6 +84,23 @@ Analisi temporale descrittiva — 4 file in `results/exploratory/`:
 **Nota**: gli `n` nel CSV sono righe del dataset merged (espanso dal join topic), non recensioni uniche.
 PCA, K-Means e SVM sono stati rimossi: class imbalance pre/during/post (93k vs 6k vs 10k)
 rendeva la classificazione temporale non interpretabile.
+
+## Validazione empirica (gold standard in-domain)
+- `analysis/generate_gold_standard.py` campiona 150 recensioni IT di Cagliari
+  (30 per finestra: pre/during/post/baseline_pre/baseline_during, `random_state=42`)
+  e scrive `validation/gold_standard_da_annotare.csv`.
+- Dopo annotazione manuale (etichetta positive/negative), il file annotato va salvato
+  come `validation/gold_standard_annotato.csv` (richiesto da `empirical_validation.py`,
+  presente nel repo — 150 righe, 147 positive / 3 negative). Una copia leggibile in
+  formato Excel è disponibile in `validation/gold_standard_annotato.xlsx`.
+- `analysis/empirical_validation.py` confronta Feel-IT (`MilaNLProc/feel-it-italian-sentiment`)
+  e `nlptown/bert-base-multilingual-uncased-sentiment` (mappatura 1-2★→negative, 3-5★→positive)
+  sul gold standard, salvando in `validation/outputs/`: confusion matrix, classification
+  report e `confronto_modelli.csv` per entrambi i modelli.
+- **Risultato chiave**: Feel-IT accuracy 58% / macro F1 0.395; nlptown accuracy 96% / macro F1 0.490.
+  Il 96% di nlptown è un artefatto della classe maggioritaria (0/3 negativi identificati
+  correttamente): nessuno dei due modelli gestisce bene la classe negativa minoritaria.
+  Discussione completa in `report_tecnico.md` sezione 9.2-9.3.
 
 ## Ordine di esecuzione pipeline
 ```bash
@@ -102,8 +134,10 @@ pip install beautifulsoup4 sentencepiece
 - Ottimizzato per **Apple M2 8GB RAM**: batch_size=8, device=-1 (CPU), no MPS
 - Tutti gli script supportano `--sample N` per testare su un sottoinsieme
 - `topic_modeling.py` ha `--no-gridsearch` per saltare GridSearch (più veloce)
-- I modelli HuggingFace usati: `MilaNLProc/feel-it-italian-sentiment`,
+- I modelli HuggingFace usati nella pipeline: `MilaNLProc/feel-it-italian-sentiment`,
   `MilaNLProc/feel-it-italian-emotion`, `j-hartmann/emotion-english-distilroberta-base`
+- Modello aggiuntivo usato solo per validazione (non nella pipeline principale):
+  `nlptown/bert-base-multilingual-uncased-sentiment`
 - BERTopic usa `paraphrase-multilingual-MiniLM-L12-v2` (multilingua, ~120MB)
 
 ## Bug fix Feel-IT (transformers 5.x)

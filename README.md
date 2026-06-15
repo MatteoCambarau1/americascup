@@ -37,9 +37,8 @@ project/
 ├── booking_scraper_olbia.py      # Scraper Booking.com per Olbia
 │
 ├── data/
-│   ├── raw/                      # CSV grezzi estratti dagli scraper
-│   ├── processed/                # CSV processati dalla pipeline
-│   └── baselines/                # Dati baseline anno precedente (2025)
+│   ├── raw/                      # CSV grezzi estratti dagli scraper (dati 2026 e baseline 2025)
+│   └── processed/                # CSV processati dalla pipeline
 │
 ├── analysis/
 │   ├── config.py                 # Finestre temporali, città, path cartelle
@@ -48,10 +47,17 @@ project/
 │   ├── sentiment_analysis.py     # Sentiment & Emotion Analysis (Feel-IT / VADER)
 │   ├── topic_modeling.py         # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
 │   ├── comparative.py            # Analisi comparativa finale, summary report
-│   └── validation.py             # Validazione modelli NLP su benchmark pubblici
+│   ├── exploratory.py            # Analisi temporale descrittiva (box plot, 2026 vs 2025)
+│   ├── validation.py             # Validazione modelli NLP su benchmark esterni (non eseguita)
+│   ├── generate_gold_standard.py # Genera il gold standard per la validazione in-domain
+│   ├── empirical_validation.py   # Valida Feel-IT vs nlptown sul gold standard annotato
+│   └── patches/                  # Fix tokenizer Feel-IT (transformers 5.x)
 │
+├── validation/                   # Gold standard e output della validazione in-domain
 ├── results/                      # Output grafici, aggregazioni, report
 │
+├── report_tecnico.md             # Report tecnico completo (fonte canonica)
+├── report_tecnico.docx           # Report tecnico in formato Word
 ├── CLAUDE.md                     # Contesto progetto per Claude Code
 ├── requirements.txt
 └── README.md
@@ -111,12 +117,19 @@ python booking_scraper_olbia.py
 
 > ⚠️ **Nota**: Modificare `DATE_FROM` e `DATE_TO` nello script per cambiare il range di raccolta. Gli scraper supportano il checkpoint automatico: se interrotti, riprendono dalla struttura successiva.
 
-### 2. Validazione modelli NLP (opzionale ma consigliato)
+### 2. Validazione modelli NLP (opzionale, infrastruttura pronta ma non eseguita)
 
 ```bash
 python -m analysis.validation
 python -m analysis.validation --max-samples 50   # test rapido
 ```
+
+> ℹ️ La validazione empirica effettivamente eseguita per il report è quella
+> in-domain su gold standard annotato manualmente (vedi sezione 9 di
+> `report_tecnico.md`): `analysis/generate_gold_standard.py` campiona 150
+> recensioni di Cagliari, e dopo annotazione manuale
+> `analysis/empirical_validation.py` confronta Feel-IT vs
+> `nlptown/bert-base-multilingual-uncased-sentiment`.
 
 ### 3. Preprocessing
 
@@ -145,6 +158,12 @@ python -m analysis.topic_modeling --sample 200 --no-gridsearch   # test rapido
 python -m analysis.comparative
 ```
 
+### 7. Analisi Temporale Descrittiva
+
+```bash
+python -m analysis.exploratory
+```
+
 ---
 
 ## 🔧 Pipeline Completa
@@ -154,7 +173,7 @@ Fase 1: Estrazione Dati
     ├── booking_scraper_cagliari.py
     └── booking_scraper_olbia.py
 
-Fase 2: Validazione Modelli (opzionale)
+Fase 2: Validazione Modelli (opzionale, non eseguita)
     └── analysis/validation.py
 
 Fase 3: Preprocessing
@@ -166,6 +185,9 @@ Fase 4: Analisi NLP
 
 Fase 5: Analisi Comparativa
     └── analysis/comparative.py
+
+Fase 6: Analisi Temporale Descrittiva
+    └── analysis/exploratory.py
 ```
 
 ---
@@ -181,16 +203,19 @@ Fase 5: Analisi Comparativa
 
 ## 📝 Deliverable Finali
 
-- **Report tecnico** – documento scritto con metodologia, risultati e conclusioni
+- **`report_tecnico.md` / `report_tecnico.docx`** – report tecnico completo (11 sezioni) con metodologia, risultati, validazione e conclusioni
 - **Presentazione PowerPoint** – sintesi visiva dei risultati per la presentazione d'esame
 
 ---
 
 ## 🧪 Analisi Aggiuntive (Opzionali)
 
-- **PCA** – riduzione dimensionale per visualizzare cluster di topic/sentimenti
-- **SVM** – classificazione supervisionata del sentiment
+- Validazione esterna su benchmark pubblici (`analysis/validation.py`, infrastruttura pronta, non eseguita)
 - Integrazione con interviste sul campo (pre/post evento) per validazione
+
+> **Nota**: PCA, K-Means e SVM sono state escluse dal progetto — lo sbilanciamento
+> delle classi temporali (pre ≈93k / during ≈6k / post ≈10k) rendeva la
+> classificazione non interpretabile (vedi `CLAUDE.md`).
 
 ---
 
