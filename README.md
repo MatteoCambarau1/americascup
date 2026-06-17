@@ -44,11 +44,11 @@ project/
 │   ├── config.py                 # Finestre temporali, città, path cartelle
 │   ├── utils.py                  # Parsing date italiane, assegnazione finestre
 │   ├── preprocessing.py          # Pulizia testo, lemmatizzazione, feature engineering
-│   ├── sentiment_analysis.py     # Sentiment & Emotion Analysis (Feel-IT / VADER)
+│   ├── sentiment_analysis.py     # Sentiment & Emotion Analysis (nlptown / Feel-IT emotion / DistilRoBERTa)
 │   ├── topic_modeling.py         # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
 │   ├── comparative.py            # Analisi comparativa finale, summary report
 │   ├── exploratory.py            # Analisi temporale descrittiva (box plot, 2026 vs 2025)
-│   ├── validation.py             # Validazione modelli NLP su benchmark esterni (non eseguita)
+│   ├── validation.py             # Validazione modelli NLP su benchmark esterni — ESEGUITA
 │   ├── generate_gold_standard.py # Genera il gold standard per la validazione in-domain
 │   ├── empirical_validation.py   # Valida Feel-IT vs nlptown sul gold standard annotato
 │   └── patches/                  # Fix tokenizer Feel-IT (transformers 5.x)
@@ -117,19 +117,20 @@ python booking_scraper_olbia.py
 
 > ⚠️ **Nota**: Modificare `DATE_FROM` e `DATE_TO` nello script per cambiare il range di raccolta. Gli scraper supportano il checkpoint automatico: se interrotti, riprendono dalla struttura successiva.
 
-### 2. Validazione modelli NLP (opzionale, infrastruttura pronta ma non eseguita)
+### 2. Validazione modelli NLP (eseguita)
 
 ```bash
 python -m analysis.validation
 python -m analysis.validation --max-samples 50   # test rapido
 ```
 
-> ℹ️ La validazione empirica effettivamente eseguita per il report è quella
-> in-domain su gold standard annotato manualmente (vedi sezione 9 di
-> `report_tecnico.md`): `analysis/generate_gold_standard.py` campiona 150
-> recensioni di Cagliari, e dopo annotazione manuale
-> `analysis/empirical_validation.py` confronta Feel-IT vs
-> `nlptown/bert-base-multilingual-uncased-sentiment`.
+> ℹ️ Due validazioni sono state eseguite per il report:
+> - **In-domain** (sezione 9): `analysis/empirical_validation.py` confronta Feel-IT vs
+>   `nlptown` su 150 recensioni annotate manualmente. Risultato: nlptown accuracy 96%
+>   vs Feel-IT 58% → nlptown adottato come modello principale.
+> - **Esterna** (sezione 9.4): `analysis/validation.py` valida nlptown su
+>   `mteb/tweet_sentiment_multilingual` (IT: acc 65.2%, EN: acc 70.4%) e Feel-IT emotion
+>   su `dair-ai/emotion` (proxy EN, risultati non conclusivi per mismatch di dominio).
 
 ### 3. Preprocessing
 
@@ -173,14 +174,14 @@ Fase 1: Estrazione Dati
     ├── booking_scraper_cagliari.py
     └── booking_scraper_olbia.py
 
-Fase 2: Validazione Modelli (opzionale, non eseguita)
+Fase 2: Validazione Modelli (eseguita)
     └── analysis/validation.py
 
 Fase 3: Preprocessing
     └── analysis/preprocessing.py
 
 Fase 4: Analisi NLP
-    ├── analysis/sentiment_analysis.py   (Feel-IT / VADER / DistilRoBERTa)
+    ├── analysis/sentiment_analysis.py   (nlptown / Feel-IT emotion / DistilRoBERTa)
     └── analysis/topic_modeling.py       (LDA + BERTopic)
 
 Fase 5: Analisi Comparativa
@@ -210,7 +211,7 @@ Fase 6: Analisi Temporale Descrittiva
 
 ## 🧪 Analisi Aggiuntive (Opzionali)
 
-- Validazione esterna su benchmark pubblici (`analysis/validation.py`, infrastruttura pronta, non eseguita)
+- Validazione esterna su benchmark pubblici (`analysis/validation.py`) — eseguita, risultati in sezione 9.4 del report
 - Integrazione con interviste sul campo (pre/post evento) per validazione
 
 > **Nota**: PCA, K-Means e SVM sono state escluse dal progetto — lo sbilanciamento

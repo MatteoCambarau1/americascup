@@ -12,11 +12,11 @@ analysis/
 ├── config.py               # finestre temporali, città, sorgenti, path cartelle
 ├── utils.py                # parse_italian_date(), assign_temporal_window()
 ├── preprocessing.py        # carica CSV, pulizia testo, lemmatizzazione, feature engineering
-├── sentiment_analysis.py   # Feel-IT / VADER / DistilRoBERTa, aggregazioni
+├── sentiment_analysis.py   # nlptown (sentiment, tutte le lingue) / Feel-IT emotion (IT) / DistilRoBERTa (EN), aggregazioni
 ├── topic_modeling.py       # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
 ├── comparative.py          # analisi comparativa finale, summary_report.txt
 ├── exploratory.py          # analisi temporale descrittiva (box plot, confronto 2026 vs 2025)
-├── validation.py           # valida i modelli NLP su benchmark pubblici esterni — INFRASTRUTTURA PRONTA, NON ESEGUITA
+├── validation.py           # valida i modelli NLP su benchmark pubblici esterni — ESEGUITA (nlptown IT/EN + Feel-IT emotion)
 ├── generate_gold_standard.py # campiona 150 recensioni Cagliari per annotazione manuale (gold standard)
 ├── empirical_validation.py # valida Feel-IT e nlptown sul gold standard annotato — ESEGUITO
 └── patches/
@@ -65,14 +65,19 @@ stay_type, nights_stayed, scrape_source`
 - `stay_date` non estratta dallo scraper → lasciata NaN, non impatta l'analisi
   (assign_temporal_window usa review_date)
 
-## Stato pipeline (aggiornato 2026-06-15)
+## Stato pipeline (aggiornato 2026-06-17)
 Tutti gli step completati con successo su 15509 recensioni.
 
 Validazione empirica in-domain completata (2026-06-15): confronto Feel-IT vs
 `nlptown/bert-base-multilingual-uncased-sentiment` su gold standard da 150 recensioni
 annotate manualmente. Risultati e interpretazione critica in `report_tecnico.md`,
-sezione 9 (Validazione empirica). `analysis/validation.py` (benchmark esterni per
-VADER e modelli di emozione) resta non eseguito.
+sezione 9 (Validazione empirica). `analysis/validation.py` (benchmark esterni) eseguita
+(2026-06-17): nlptown IT/EN su `mteb/tweet_sentiment_multilingual`, Feel-IT emotion
+su `dair-ai/emotion` (proxy EN). Risultati in `results/validation/` e sezione 9.4 del report.
+
+A seguito della validazione, `sentiment_analysis.py` è stato aggiornato (2026-06-17)
+per usare `nlptown/bert-base-multilingual-uncased-sentiment` come modello principale
+al posto di Feel-IT, in linea con i risultati della validazione empirica.
 
 ## Output exploratory.py
 Analisi temporale descrittiva — 4 file in `results/exploratory/`:
@@ -134,25 +139,24 @@ pip install beautifulsoup4 sentencepiece
 - Ottimizzato per **Apple M2 8GB RAM**: batch_size=8, device=-1 (CPU), no MPS
 - Tutti gli script supportano `--sample N` per testare su un sottoinsieme
 - `topic_modeling.py` ha `--no-gridsearch` per saltare GridSearch (più veloce)
-- I modelli HuggingFace usati nella pipeline: `MilaNLProc/feel-it-italian-sentiment`,
-  `MilaNLProc/feel-it-italian-emotion`, `j-hartmann/emotion-english-distilroberta-base`
-- Modello aggiuntivo usato solo per validazione (non nella pipeline principale):
-  `nlptown/bert-base-multilingual-uncased-sentiment`
+- I modelli HuggingFace usati nella pipeline: `nlptown/bert-base-multilingual-uncased-sentiment`
+  (sentiment principale, sostituisce Feel-IT), `MilaNLProc/feel-it-italian-emotion`,
+  `j-hartmann/emotion-english-distilroberta-base`
+- `MilaNLProc/feel-it-italian-sentiment` rimosso dalla pipeline principale dopo la validazione
+  empirica (accuracy 58% vs 96% di nlptown); resta referenziato in `empirical_validation.py`
 - BERTopic usa `paraphrase-multilingual-MiniLM-L12-v2` (multilingua, ~120MB)
 
-## Bug fix Feel-IT (transformers 5.x)
-Feel-IT (MilaNLProc) è incompatibile con transformers 5.x. Le fix sono **permanenti nel codice**,
-non dipendono dallo stato del venv o della cache HuggingFace:
+## Bug fix Feel-IT (transformers 5.x) — storico
+Feel-IT sentiment è stato rimosso dalla pipeline principale (2026-06-17). Il codice
+di patch resta attivo in `sentiment_analysis.py` perché `feel-it-italian-emotion`
+(modello emozione, ancora in uso nella pipeline) è anch'esso basato su CamemBERT e
+richiede le stesse fix. I patch sono inoltre referenziati da `empirical_validation.py`
+per il confronto storico sul gold standard.
 
-1. **Monkey-patch CamemBERT** — applicato a runtime in `sentiment_analysis.py`
-   (`_patch_camembert_tokenizer()`): normalizza la vocab da 3-tuple a 2-tuple prima
-   del caricamento, senza toccare file del venv.
-2. **`tokenizer.json` corretto** — salvato in `analysis/patches/feel_it_tokenizer.json`
-   e copiato automaticamente in cache da `_ensure_feel_it_tokenizer()` al primo avvio,
-   se il file in cache non ha il campo `"type": "Unigram"`.
-
-Entrambe le funzioni vengono chiamate da `_get_pipeline()` prima di caricare qualsiasi
-modello Feel-IT. **Nessuna azione manuale richiesta dopo pip install o cache svuotata.**
+Le fix applicate erano:
+1. **Monkey-patch CamemBERT** (`_patch_camembert_tokenizer()`): normalizza la vocab da 3-tuple a 2-tuple.
+2. **`tokenizer.json` corretto** in `analysis/patches/feel_it_tokenizer.json`, applicato
+   automaticamente in cache al primo avvio.
 
 ## Normalizzazione colonne city
 Il scraper produce `city` (minuscolo) ma `config.py` usa `TARGET_CITY = "Cagliari"` (title case).

@@ -6,10 +6,12 @@ datasets before running inference on the full review corpus.
 
 Models validated
 ----------------
-1. Feel-IT sentiment  (MilaNLProc/feel-it-italian-sentiment)
+1. nlptown sentiment — Italian
+   (nlptown/bert-base-multilingual-uncased-sentiment)
    Benchmark: cardiffnlp/tweet_sentiment_multilingual — Italian split
 
-2. VADER sentiment    (nltk VADER)
+2. nlptown sentiment — English
+   (nlptown/bert-base-multilingual-uncased-sentiment)
    Benchmark: cardiffnlp/tweet_sentiment_multilingual — English split
 
 3. Feel-IT emotion    (MilaNLProc/feel-it-italian-emotion)
@@ -70,11 +72,11 @@ BATCH_SIZE = 8
 RANDOM_STATE = 42
 
 # HuggingFace model IDs
-MODEL_FEEL_IT_SENTIMENT = "MilaNLProc/feel-it-italian-sentiment"
+MODEL_NLPTOWN = "nlptown/bert-base-multilingual-uncased-sentiment"
 MODEL_FEEL_IT_EMOTION = "MilaNLProc/feel-it-italian-emotion"
 
 # HuggingFace dataset IDs
-DS_TWEET_MULTILINGUAL = "cardiffnlp/tweet_sentiment_multilingual"
+DS_TWEET_MULTILINGUAL = "mteb/tweet_sentiment_multilingual"
 DS_GO_EMOTIONS_MULTILINGUAL = "MilaNLProc/de-it-fr-multilingual-go-emotions"
 
 # ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ def _append_to_report(row: dict) -> None:
 
 def _load_tweet_sentiment(lang: str, max_samples: int = MAX_SAMPLES) -> pd.DataFrame:
     """
-    Load the Cardiff tweet-sentiment dataset for *lang* ('it' or 'en').
+    Load the MTEB tweet-sentiment dataset for *lang* ('italian' or 'english').
 
     Label mapping (dataset integers → strings):
         0 → negative, 1 → neutral, 2 → positive
@@ -140,7 +142,7 @@ def _load_tweet_sentiment(lang: str, max_samples: int = MAX_SAMPLES) -> pd.DataF
     ds = load_dataset(DS_TWEET_MULTILINGUAL, lang, split="test")
 
     df = ds.to_pandas()[["text", "label"]].dropna()
-    label_map = {0: "negative", 1: "neutral", 2: "positive"}
+    label_map = {"0": "negative", "1": "neutral", "2": "positive"}
     df["label_str"] = df["label"].map(label_map)
     df = df.dropna(subset=["label_str"])
 
@@ -153,40 +155,30 @@ def _load_tweet_sentiment(lang: str, max_samples: int = MAX_SAMPLES) -> pd.DataF
 
 def _load_go_emotions_italian(max_samples: int = MAX_SAMPLES) -> pd.DataFrame:
     """
-    Load the multilingual GoEmotions dataset, Italian split.
+    Load dair-ai/emotion (English, public) as the Feel-IT emotion benchmark.
 
-    The dataset stores labels as integers mapped to emotion strings.
-    We keep only examples whose label appears in the Feel-IT emotion
-    label set: {joy, sadness, anger, fear, surprise, disgust}.
+    NOTE: texts are English while Feel-IT was trained on Italian — expect low
+    scores. Used only because MilaNLProc/de-it-fr-multilingual-go-emotions
+    is access-restricted (HTTP 401).
+
+    Label mapping (dataset integers → strings):
+        0 → sadness, 1 → joy, 2 → love, 3 → anger, 4 → fear, 5 → surprise
+
+    We keep only the four emotions in the Feel-IT label set: {joy, sadness,
+    anger, fear}.
     """
     from datasets import load_dataset
 
-    log.info("Loading %s — language: it …", DS_GO_EMOTIONS_MULTILINGUAL)
-    ds = load_dataset(DS_GO_EMOTIONS_MULTILINGUAL, split="test")
+    log.info("Loading dair-ai/emotion (English proxy for Feel-IT emotion benchmark) …")
+    ds = load_dataset("dair-ai/emotion", split="test")
 
-    df = ds.to_pandas()
+    df = ds.to_pandas()[["text", "label"]].dropna()
 
-    # Filter to Italian rows if a language column is present
-    if "language" in df.columns:
-        df = df[df["language"] == "it"]
-    elif "lang" in df.columns:
-        df = df[df["lang"] == "it"]
-
-    # The label column may be an integer id; convert via dataset features
-    feel_it_emotions = {"joy", "sadness", "anger", "fear", "surprise", "disgust"}
-
-    # Try to resolve label names from dataset metadata
-    if hasattr(ds, "features") and "label" in ds.features:
-        feature = ds.features["label"]
-        if hasattr(feature, "names"):
-            id2label = {i: n.lower() for i, n in enumerate(feature.names)}
-            df["label_str"] = df["label"].map(id2label)
-        else:
-            df["label_str"] = df["label"].astype(str).str.lower()
-    else:
-        df["label_str"] = df["label"].astype(str).str.lower()
+    label_map = {0: "sadness", 1: "joy", 2: "love", 3: "anger", 4: "fear", 5: "surprise"}
+    df["label_str"] = df["label"].map(label_map)
 
     # Keep only emotions the Feel-IT model was trained on
+    feel_it_emotions = {"joy", "sadness", "anger", "fear"}
     df = df[df["label_str"].isin(feel_it_emotions)].dropna(subset=["text", "label_str"])
 
     if len(df) > max_samples:
@@ -237,23 +229,18 @@ def _load_hf_pipeline(model_id: str):
 # Label normalisers
 # ---------------------------------------------------------------------------
 
-def _normalise_feel_it_sentiment(label: str) -> str:
-    """Map Feel-IT sentiment output to the three-class schema."""
-    mapping = {
-        "positive": "positive",
-        "negative": "negative",
-        "label_0": "negative",
-        "label_1": "positive",
-    }
-    return mapping.get(label.lower(), "neutral")
+def _normalise_nlptown(label: str) -> str:
+    """Map nlptown star-rating output to the three-class schema.
 
-
-def _normalise_vader(compound: float) -> str:
-    if compound >= 0.05:
-        return "positive"
-    if compound <= -0.05:
+    nlptown returns "1 star", "2 stars", … "5 stars".
+    Mapping: 1-2 → negative, 3 → neutral, 4-5 → positive.
+    """
+    label = label.lower().strip()
+    if label.startswith("1") or label.startswith("2"):
         return "negative"
-    return "neutral"
+    if label.startswith("3"):
+        return "neutral"
+    return "positive"
 
 
 def _normalise_feel_it_emotion(label: str) -> str:
@@ -312,74 +299,62 @@ def _run_validation(
 
 
 # ---------------------------------------------------------------------------
-# 1. Validate Feel-IT sentiment (Italian)
+# 1. Validate nlptown sentiment (Italian)
 # ---------------------------------------------------------------------------
 
-def validate_feel_it_sentiment(
+def validate_nlptown_italian(
     max_samples: int = MAX_SAMPLES,
     batch_size: int = BATCH_SIZE,
 ) -> Optional[dict]:
-    """Validate Feel-IT Italian sentiment against the Cardiff tweet dataset."""
-    log.info("─── Validating: Feel-IT Sentiment ───")
+    """Validate nlptown sentiment against the Cardiff Italian tweet dataset."""
+    log.info("─── Validating: nlptown Sentiment (Italian) ───")
     try:
-        df = _load_tweet_sentiment("it", max_samples)
-        pipe = _load_hf_pipeline(MODEL_FEEL_IT_SENTIMENT)
+        df = _load_tweet_sentiment("italian", max_samples)
+        pipe = _load_hf_pipeline(MODEL_NLPTOWN)
 
         raw_preds = _hf_predict_batched(df["text"].tolist(), pipe, batch_size)
-        pred_labels = [_normalise_feel_it_sentiment(p) for p in raw_preds]
+        pred_labels = [_normalise_nlptown(p) for p in raw_preds]
         true_labels = df["label_str"].tolist()
 
         return _run_validation(
-            model_name="Feel-IT Sentiment (Italian)",
+            model_name="nlptown Sentiment (Italian)",
             true_labels=true_labels,
             pred_labels=pred_labels,
             label_set=["positive", "negative", "neutral"],
-            cm_filename="cm_feel_it_sentiment.png",
+            cm_filename="cm_nlptown_sentiment_it.png",
         )
     except Exception as exc:
-        log.error("Feel-IT sentiment validation failed: %s", exc)
+        log.error("nlptown Italian sentiment validation failed: %s", exc)
         return None
 
 
 # ---------------------------------------------------------------------------
-# 2. Validate VADER sentiment (English)
+# 2. Validate nlptown sentiment (English)
 # ---------------------------------------------------------------------------
 
-def validate_vader_sentiment(
+def validate_nlptown_english(
     max_samples: int = MAX_SAMPLES,
-    batch_size: int = BATCH_SIZE,   # unused for VADER, kept for API consistency
+    batch_size: int = BATCH_SIZE,
 ) -> Optional[dict]:
-    """Validate VADER against the Cardiff English tweet-sentiment dataset."""
-    log.info("─── Validating: VADER Sentiment ───")
+    """Validate nlptown sentiment against the Cardiff English tweet dataset."""
+    log.info("─── Validating: nlptown Sentiment (English) ───")
     try:
-        import nltk
-        from nltk.sentiment.vader import SentimentIntensityAnalyzer
+        df = _load_tweet_sentiment("english", max_samples)
+        pipe = _load_hf_pipeline(MODEL_NLPTOWN)
 
-        for res in ("vader_lexicon",):
-            try:
-                nltk.data.find(f"sentiment/{res}.zip")
-            except LookupError:
-                nltk.download(res, quiet=True)
-
-        df = _load_tweet_sentiment("en", max_samples)
-        sid = SentimentIntensityAnalyzer()
-
-        pred_labels: list[str] = []
-        for text in tqdm(df["text"].tolist(), desc="  VADER inference", leave=False):
-            compound = sid.polarity_scores(str(text))["compound"]
-            pred_labels.append(_normalise_vader(compound))
-
+        raw_preds = _hf_predict_batched(df["text"].tolist(), pipe, batch_size)
+        pred_labels = [_normalise_nlptown(p) for p in raw_preds]
         true_labels = df["label_str"].tolist()
 
         return _run_validation(
-            model_name="VADER Sentiment (English)",
+            model_name="nlptown Sentiment (English)",
             true_labels=true_labels,
             pred_labels=pred_labels,
             label_set=["positive", "negative", "neutral"],
-            cm_filename="cm_vader_sentiment.png",
+            cm_filename="cm_nlptown_sentiment_en.png",
         )
     except Exception as exc:
-        log.error("VADER sentiment validation failed: %s", exc)
+        log.error("nlptown English sentiment validation failed: %s", exc)
         return None
 
 
@@ -446,8 +421,8 @@ def run_validation(
 
     summaries = []
     validators = [
-        validate_feel_it_sentiment,
-        validate_vader_sentiment,
+        validate_nlptown_italian,
+        validate_nlptown_english,
         validate_feel_it_emotion,
     ]
     for fn in tqdm(validators, desc="Validation suite"):

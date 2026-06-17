@@ -1,12 +1,12 @@
 """
 Sentiment and emotion analysis pipeline for tourist review data.
 
-Two-track NLP approach:
-    - Italian text: Feel-IT (HuggingFace) for sentiment; Feel-IT emotion model
-      for emotions.  Falls back to TextBlob when Feel-IT is unavailable.
-    - English text: VADER for sentiment; DistilRoBERTa for emotions.
+Sentiment: nlptown/bert-base-multilingual-uncased-sentiment is used for all
+languages (Italian, English, unknown).  Falls back to TextBlob when nlptown
+is unavailable.
 
-Language detection is performed per-row with langdetect.
+Emotion: Feel-IT emotion model for Italian; DistilRoBERTa for English.
+Language detection (langdetect) is still performed per-row for emotion dispatch.
 
 Outputs
 -------
@@ -54,7 +54,7 @@ TEXT_POSITIVE_COL = "text_positive_lemma"
 TEXT_NEGATIVE_COL = "text_negative_lemma"
 
 # HuggingFace model identifiers
-HF_SENTIMENT_IT = "MilaNLProc/feel-it-italian-sentiment"
+HF_SENTIMENT_IT = "nlptown/bert-base-multilingual-uncased-sentiment"
 HF_EMOTION_IT = "MilaNLProc/feel-it-italian-emotion"
 HF_EMOTION_EN = "j-hartmann/emotion-english-distilroberta-base"
 
@@ -84,82 +84,46 @@ def detect_language(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Sentiment — VADER (English)
+# Sentiment — nlptown / TextBlob (Italian and multilingual)
 # ---------------------------------------------------------------------------
 
-def _load_vader():
-    """Load VADER analyser, downloading NLTK data if needed."""
-    import nltk
-    from nltk.sentiment.vader import SentimentIntensityAnalyzer
-    try:
-        nltk.data.find("sentiment/vader_lexicon.zip")
-    except LookupError:
-        log.info("Downloading VADER lexicon …")
-        nltk.download("vader_lexicon", quiet=True)
-    return SentimentIntensityAnalyzer()
+# nlptown outputs 1-5 star labels; map to signed [-1, +1] score and polarity
+_NLPTOWN_STAR_TO_LABEL = {
+    "1 star":  "negative",
+    "2 stars": "negative",
+    "3 stars": "neutral",
+    "4 stars": "positive",
+    "5 stars": "positive",
+}
+
+_NLPTOWN_STAR_TO_SCORE = {
+    "1 star":  -1.0,
+    "2 stars": -0.5,
+    "3 stars":  0.0,
+    "4 stars":  0.5,
+    "5 stars":  1.0,
+}
 
 
-def _vader_label(compound: float) -> str:
-    if compound >= 0.05:
-        return "positive"
-    if compound <= -0.05:
-        return "negative"
-    return "neutral"
-
-
-def sentiment_vader(texts: list[str], vader) -> list[dict]:
-    """Return list of {sentiment_label, sentiment_score} dicts using VADER."""
-    results = []
-    for text in texts:
-        if not text.strip():
-            results.append({"sentiment_label": "neutral", "sentiment_score": 0.0})
-            continue
-        scores = vader.polarity_scores(text)
-        compound = scores["compound"]
-        results.append({
-            "sentiment_label": _vader_label(compound),
-            "sentiment_score": round(compound, 4),
-        })
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Sentiment — Feel-IT / TextBlob (Italian)
-# ---------------------------------------------------------------------------
-
-def _hf_label_to_standard(label: str) -> str:
-    """Map HuggingFace model output labels to positive/negative/neutral."""
-    label = label.lower()
-    if label in ("positive", "pos", "label_1", "1"):
-        return "positive"
-    if label in ("negative", "neg", "label_0", "0"):
-        return "negative"
-    return "neutral"
-
-
-def sentiment_feel_it(
+def sentiment_nlptown(
     texts: list[str],
     pipeline,
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> list[dict]:
-    """Run Feel-IT sentiment pipeline in batches."""
-    # Truncate to avoid exceeding model max length
+    """Run nlptown multilingual sentiment pipeline in batches."""
     truncated = [t[:MAX_TOKEN_LEN * 4] if t else "" for t in texts]
     results = []
-    for i in tqdm(range(0, len(truncated), batch_size), desc="Feel-IT sentiment", leave=False):
+    for i in tqdm(range(0, len(truncated), batch_size), desc="nlptown sentiment", leave=False):
         batch = truncated[i : i + batch_size]
-        # Replace empty strings with a space so the model doesn't error
         batch = [t if t.strip() else " " for t in batch]
         preds = pipeline(batch, truncation=True, max_length=MAX_TOKEN_LEN)
         for pred in preds:
-            # top_k=1 returns [[{...}]] in newer transformers; normalise to {…}
             if isinstance(pred, list):
                 pred = pred[0]
-            label = _hf_label_to_standard(pred["label"])
-            score = round(pred["score"], 4)
-            # Convert score to signed: negative → negate
-            signed = score if label == "positive" else (-score if label == "negative" else 0.0)
-            results.append({"sentiment_label": label, "sentiment_score": signed})
+            label_raw = pred["label"].lower()
+            label = _NLPTOWN_STAR_TO_LABEL.get(label_raw, "neutral")
+            score = _NLPTOWN_STAR_TO_SCORE.get(label_raw, 0.0)
+            results.append({"sentiment_label": label, "sentiment_score": score})
     return results
 
 
@@ -303,8 +267,8 @@ def _get_pipeline(model_id: str, task: str = "text-classification"):
     return pipe
 
 
-def _feel_it_available() -> bool:
-    """Return True if the Feel-IT sentiment model can be loaded."""
+def _nlptown_available() -> bool:
+    """Return True if the nlptown sentiment model can be loaded."""
     try:
         _get_pipeline(HF_SENTIMENT_IT)
         return True
@@ -318,34 +282,13 @@ def _feel_it_available() -> bool:
 
 def _run_sentiment_batch(
     texts: list[str],
-    langs: list[str],
-    vader,
-    feel_it_pipe,
+    nlptown_pipe,
     batch_size: int,
 ) -> list[dict]:
-    """Dispatch each text to the correct sentiment backend."""
-    results: list[Optional[dict]] = [None] * len(texts)
-
-    # Collect indices by language
-    en_idx = [i for i, l in enumerate(langs) if l == "en"]
-    it_idx = [i for i, l in enumerate(langs) if l != "en"]  # 'it' and 'unknown'
-
-    if en_idx:
-        en_texts = [texts[i] for i in en_idx]
-        en_results = sentiment_vader(en_texts, vader)
-        for pos, idx in enumerate(en_idx):
-            results[idx] = en_results[pos]
-
-    if it_idx:
-        it_texts = [texts[i] for i in it_idx]
-        if feel_it_pipe is not None:
-            it_results = sentiment_feel_it(it_texts, feel_it_pipe, batch_size)
-        else:
-            it_results = sentiment_textblob(it_texts)
-        for pos, idx in enumerate(it_idx):
-            results[idx] = it_results[pos]
-
-    return results  # type: ignore[return-value]
+    """Run sentiment on all texts with nlptown, falling back to TextBlob."""
+    if nlptown_pipe is not None:
+        return sentiment_nlptown(texts, nlptown_pipe, batch_size)
+    return sentiment_textblob(texts)
 
 
 def _run_emotion_batch(
@@ -413,16 +356,15 @@ def run_sentiment(
     log.info("Detecting languages …")
     langs = [detect_language(t) for t in tqdm(texts, desc="Language detection")]
 
-    vader = _load_vader()
-    feel_it_pipe = None
+    nlptown_pipe = None
     try:
-        feel_it_pipe = _get_pipeline(HF_SENTIMENT_IT)
-        log.info("Using Feel-IT for Italian sentiment.")
+        nlptown_pipe = _get_pipeline(HF_SENTIMENT_IT)
+        log.info("Using nlptown for all languages.")
     except Exception:
-        log.warning("Feel-IT unavailable — falling back to TextBlob for Italian.")
+        log.warning("nlptown unavailable — falling back to TextBlob.")
 
     log.info("Running sentiment analysis on %d texts …", len(texts))
-    results = _run_sentiment_batch(texts, langs, vader, feel_it_pipe, batch_size)
+    results = _run_sentiment_batch(texts, nlptown_pipe, batch_size)
 
     df["sentiment_label"] = [r["sentiment_label"] for r in results]
     df["sentiment_score"] = [r["sentiment_score"] for r in results]
