@@ -17,8 +17,8 @@ Il progetto mira a misurare e quantificare l'impatto dell'**America's Cup 2026**
 | Pre-evento         | 1 aprile – 20 maggio 2026        |
 | Durante evento     | 21 maggio – 24 maggio 2026       |
 | Post-evento        | 25 maggio – 15 giugno 2026       |
-| Baseline 2025      | Stesse finestre, anno precedente |
-| Città di controllo | Olbia (stessa finestra, nessun evento) |
+| Baseline 2025      | Stesse finestre, anno precedente (solo Cagliari) |
+| Città di controllo | Olbia (stessa finestra 2026, nessun evento) |
 
 ---
 
@@ -53,11 +53,21 @@ project/
 │   ├── empirical_validation.py   # Valida Feel-IT vs nlptown sul gold standard annotato
 │   └── patches/                  # Fix tokenizer Feel-IT (transformers 5.x)
 │
-├── validation/                   # Gold standard e output della validazione in-domain
+├── validation/
+│   ├── gold_standard_da_annotare.csv   # Template generato da generate_gold_standard.py
+│   ├── gold_standard_annotato.csv      # Gold standard con annotazioni manuali (150 rec.)
+│   ├── gold_standard_annotato.xlsx     # Versione Excel leggibile del gold standard
+│   └── outputs/                        # Confusion matrix, classification report, confronto modelli
+│
 ├── results/                      # Output grafici, aggregazioni, report
+│
+├── scripts/
+│   ├── create_presentation.js    # Genera results/presentazione.pptx con pptxgenjs (Node.js)
+│   └── rezip.py                  # Utility post-generazione PPTX
 │
 ├── report_tecnico.md             # Report tecnico completo (fonte canonica)
 ├── report_tecnico.docx           # Report tecnico in formato Word
+├── report_tecnico.pdf            # Report tecnico in formato PDF
 ├── CLAUDE.md                     # Contesto progetto per Claude Code
 ├── requirements.txt
 └── README.md
@@ -204,8 +214,8 @@ Fase 6: Analisi Temporale Descrittiva
 
 ## 📝 Deliverable Finali
 
-- **`report_tecnico.md` / `report_tecnico.docx`** – report tecnico completo (11 sezioni) con metodologia, risultati, validazione e conclusioni
-- **Presentazione PowerPoint** – sintesi visiva dei risultati per la presentazione d'esame
+- **`report_tecnico.md` / `report_tecnico.docx` / `report_tecnico.pdf`** – report tecnico completo (Executive Summary + Indice + 12 sezioni) con metodologia, risultati, validazione e conclusioni
+- **`results/presentazione.pdf`** – presentazione d'esame in formato PDF (15 slide)
 
 ---
 
@@ -217,6 +227,11 @@ Fase 6: Analisi Temporale Descrittiva
 > **Nota**: PCA, K-Means e SVM sono state escluse dal progetto — lo sbilanciamento
 > delle classi temporali (pre ≈93k / during ≈6k / post ≈10k) rendeva la
 > classificazione non interpretabile (vedi `CLAUDE.md`).
+
+> **Nota — Baseline Olbia 2025**: i dati Olbia 2025 non sono stati raccolti per scelta
+> progettuale deliberata. Il confronto con Olbia è esclusivamente sincronico (stessa
+> finestra temporale 2026, città diverse), non longitudinale. La baseline longitudinale
+> (2026 vs 2025) è disponibile solo per Cagliari.
 
 ---
 

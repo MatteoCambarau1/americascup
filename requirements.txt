@@ -1,0 +1,39 @@
+# Web scraping
+selenium
+beautifulsoup4
+sentencepiece
+
+# Data processing
+pandas
+numpy
+
+# NLP — preprocessing
+nltk
+spacy
+langdetect
+textblob
+vaderSentiment
+
+# NLP — modelli transformer
+transformers
+datasets
+torch
+tqdm
+
+# Topic modeling
+bertopic
+sentence-transformers
+scikit-learn
+pyldavis
+wordcloud
+
+# Visualizzazione
+matplotlib
+seaborn
+
+# Utility
+openpyxl
+
+# Modelli spaCy (eseguire dopo pip install):
+# python -m spacy download it_core_news_sm
+# python -m spacy download en_core_web_sm
