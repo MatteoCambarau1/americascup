@@ -57,3 +57,15 @@ __pycache__/
 .venv/
 venv/
 
+italiano/
+*.docx
+*.docx.bak*
+unpacked_*/
+discorso_presentazione.*
+studio_presentazione.*
+*.skill
+*.skill.md
+validation/
+checkcsv.py
+package*.json
+scripts/
