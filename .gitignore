@@ -51,6 +51,7 @@ Thumbs.db
 # Project-specific
 data/
 results/
+!results/report_tecnico_formatted.pdf
 __pycache__/
 .env
 *.egg-info/
@@ -69,3 +70,4 @@ validation/
 checkcsv.py
 package*.json
 scripts/
+!results/report_tecnico_formatted.pdf
