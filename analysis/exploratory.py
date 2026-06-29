@@ -28,6 +28,9 @@ import numpy as np
 import pandas as pd
 
 from analysis.config import PROCESSED_DATA_DIR, RESULTS_DIR
+from analysis.plot_style import PALETTE, WINDOW_LABELS as STYLE_WINDOW_LABELS, apply_style
+
+apply_style()
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(
@@ -47,12 +50,8 @@ CONTROL_CITY   = "olbia"
 
 WINDOW_ORDER   = ["pre", "during", "post"]
 BASELINE_ORDER = ["baseline_pre", "baseline_during", "baseline_post"]
-WINDOW_LABELS  = {
-    "pre":    "Pre\n(apr–20 mag)",
-    "during": "During\n(21–24 mag)",
-    "post":   "Post\n(25 mag–15 giu)",
-}
-PALETTE_WINDOW = {"pre": "#2ca02c", "during": "#d62728", "post": "#9467bd"}
+WINDOW_LABELS  = STYLE_WINDOW_LABELS
+PALETTE_WINDOW = {"pre": PALETTE["pre"], "during": PALETTE["during"], "post": PALETTE["post"]}
 
 
 # ---------------------------------------------------------------------------
@@ -139,20 +138,37 @@ def _temporal_boxplot(df: pd.DataFrame, metric: str, ylabel: str,
             df.loc[(df["city"] == city) & (df["window"] == w), metric].dropna().values
             for w in WINDOW_ORDER
         ]
-        bp = ax.boxplot(data_by_window, patch_artist=True, notch=False,
-                        medianprops=dict(color="black", lw=2))
+        bp = ax.boxplot(
+            data_by_window, patch_artist=True, notch=False,
+            medianprops=dict(color="black", lw=2),
+            showmeans=True,
+            meanprops=dict(marker="D", markerfacecolor="white",
+                           markeredgecolor="black", markersize=5),
+        )
         for patch, w in zip(bp["boxes"], WINDOW_ORDER):
             patch.set_facecolor(PALETTE_WINDOW[w])
-            patch.set_alpha(0.7)
+            patch.set_alpha(0.75)
+            patch.set_edgecolor("#555555")
         ax.set_xticks(range(1, len(WINDOW_ORDER) + 1))
         ax.set_xticklabels([WINDOW_LABELS[w] for w in WINDOW_ORDER], fontsize=9)
         ax.set_title(city.title(), fontsize=11)
         ax.set_ylabel(ylabel if ax is axes[0] else "")
-        for j, d in enumerate(data_by_window, 1):
+        ax.grid(axis="y", color="#e3e7eb", linewidth=0.8)
+        ax.grid(axis="x", visible=False)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+
+        # Annotazioni: media (◆) e numero di osservazioni per finestra
+        for j, (d, mean_val) in enumerate(
+            zip(data_by_window, [np.mean(d) if len(d) else np.nan for d in data_by_window]), 1
+        ):
+            if len(d):
+                ax.text(j, mean_val, f" {mean_val:.2f}", ha="left", va="center",
+                        fontsize=8, color="#333333", fontweight="bold")
             ax.text(j, ax.get_ylim()[0], f"n={len(d)}", ha="center",
                     va="bottom", fontsize=7, color="#555555")
 
-    fig.suptitle(title, fontsize=13)
+    fig.suptitle(title, fontsize=13, fontweight="bold")
     fig.tight_layout()
     fig.savefig(os.path.join(OUT_DIR, fname), dpi=150)
     plt.close(fig)
@@ -190,8 +206,8 @@ def _temporal_comparison_2026_vs_2025(df_cag: pd.DataFrame) -> None:
         (ax2, "sentiment", "Sentiment score medio",  "Sentiment"),
     ]:
         for year, offset, color in [
-            ("2026", -bar_width / 2, "#1f77b4"),
-            ("2025", +bar_width / 2, "#aec7e8"),
+            ("2026", -bar_width / 2, PALETTE["year_2026"]),
+            ("2025", +bar_width / 2, PALETTE["year_2025"]),
         ]:
             heights = [
                 comp.loc[(comp["window"] == w) & (comp["year"] == year), metric]
@@ -207,21 +223,44 @@ def _temporal_comparison_2026_vs_2025(df_cag: pd.DataFrame) -> None:
             ]
             bars = ax.bar(x + offset, heights, bar_width,
                           label=f"America's Cup {year}" if year == "2026" else f"Baseline {year}",
-                          color=color, alpha=0.85)
-            for bar, n in zip(bars, ns):
-                h = bar.get_height()
-                if not np.isnan(h):
+                          color=color, alpha=0.9, edgecolor="#555555", linewidth=0.6)
+            # Margine verticale per le etichette, proporzionale al range dei valori
+            valid = [v for v in comp[metric] if not np.isnan(v)]
+            span = (max(valid) - min(valid)) if valid else 1.0
+            pad  = max(span * 0.04, 0.02)
+            for bar, h, n in zip(bars, heights, ns):
+                if np.isnan(h):
+                    continue
+                if h >= 0:
                     ax.text(bar.get_x() + bar.get_width() / 2,
-                            h + 0.01, f"n={n}", ha="center",
-                            va="bottom", fontsize=7)
+                            h + pad, f"{h:.2f}\n(n={n})", ha="center",
+                            va="bottom", fontsize=7.5, color="#333333")
+                else:
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            h - pad, f"{h:.2f}\n(n={n})", ha="center",
+                            va="top", fontsize=7.5, color="#333333")
 
         ax.set_xticks(x)
         ax.set_xticklabels([WINDOW_LABELS[w] for w in WINDOW_ORDER], fontsize=9)
         ax.set_ylabel(ylabel)
         ax.set_title(f"Cagliari — {title_suffix}: 2026 vs 2025")
-        ax.legend(fontsize=9)
+        ax.legend(fontsize=9, loc="lower right" if metric == "rating" else "upper right")
+        ax.grid(axis="y", color="#e3e7eb", linewidth=0.8)
+        ax.grid(axis="x", visible=False)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        ax.axhline(0, color="#888888", linewidth=0.8)
 
-    fig.suptitle("Cagliari: confronto America's Cup 2026 vs baseline 2025", fontsize=13)
+        # Limiti y con margine extra per etichette sopra/sotto le barre
+        valid = [v for v in comp[metric] if not np.isnan(v)]
+        if valid:
+            vmin, vmax = min(valid), max(valid)
+            span = vmax - vmin if vmax != vmin else abs(vmax) or 1.0
+            top    = vmax + span * 0.30 if vmax > 0 else span * 0.10
+            bottom = vmin - span * 0.30 if vmin < 0 else 0
+            ax.set_ylim(bottom, top)
+
+    fig.suptitle("Cagliari: confronto America's Cup 2026 vs baseline 2025", fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(os.path.join(OUT_DIR, "temporal_cagliari_2026_vs_2025.png"), dpi=150)
     plt.close(fig)
