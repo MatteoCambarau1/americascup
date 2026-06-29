@@ -1,6 +1,6 @@
 """
 Booking.com Scraper – America's Cup Olbia
-Entra nelle strutture dai risultati di ricerca ed estrae le recensioni.
+Navigates search results, enters each property page and extracts reviews.
 """
 
 import time
@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # ──────────────────────────────────────────────
-# CONFIGURAZIONE
+# CONFIGURATION
 # ──────────────────────────────────────────────
 
 SEARCH_URLS = {
@@ -31,14 +31,14 @@ SEARCH_URLS = {
 OUTPUT_DIR  = "data/raw/"
 SLEEP_MIN   = 2
 SLEEP_MAX   = 5
-MAX_PROPERTIES = 1000  # strutture da visitare per città
-MAX_REVIEW_PAGES = 10000   # pagine recensioni per struttura  ← test: veloce
+MAX_PROPERTIES = 1000  # properties to visit per city
+MAX_REVIEW_PAGES = 10000   # review pages per property
 
-# ── Filtro date ────────────────────────────────
-# Modifica questi valori per cambiare il range di raccolta.
-# Formato: "YYYY-MM-DD"  |  None = nessun limite
-DATE_FROM = "2026-05-25"   # includi recensioni da questa data
-DATE_TO   = "2026-06-15"   # includi recensioni fino a questa data
+# ── Date filter ────────────────────────────────
+# Edit these values to change the collection range.
+# Format: "YYYY-MM-DD"  |  None = no limit
+DATE_FROM = "2026-05-25"   # include reviews from this date
+DATE_TO   = "2026-06-15"   # include reviews up to this date
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -51,7 +51,7 @@ USER_AGENTS = [
 
 
 # ──────────────────────────────────────────────
-# PARSING DATE
+# DATE PARSING
 # ──────────────────────────────────────────────
 
 _IT_MONTHS = {
@@ -62,11 +62,11 @@ _IT_MONTHS = {
 }
 
 def parse_review_date(s: str):
-    """Converte una stringa data italiana (es. '20 maggio 2026' o '1º maggio 2026') in oggetto date."""
+    """Converts an Italian date string (e.g. '20 maggio 2026' or '1º maggio 2026') to a date object."""
     if not isinstance(s, str) or not s.strip():
         return None
     import re
-    s = re.sub(r"(\d+)[ºª°]", r"\1", s)  # rimuove suffissi ordinali: 1º → 1
+    s = re.sub(r"(\d+)[ºª°]", r"\1", s)  # remove ordinal suffixes: 1º → 1
     for it, en in _IT_MONTHS.items():
         s = s.replace(it, en)
     try:
@@ -83,9 +83,9 @@ DATE_FROM_DT = _parse_limit(DATE_FROM)
 DATE_TO_DT   = _parse_limit(DATE_TO)
 
 def in_date_range(review_date) -> bool:
-    """Restituisce True se la data rientra nel range configurato."""
+    """Returns True if the date falls within the configured range."""
     if review_date is None:
-        return True  # se non riusciamo a parsare la data, teniamo la recensione
+        return True  # if we can't parse the date, keep the review
     if DATE_FROM_DT and review_date < DATE_FROM_DT:
         return False
     if DATE_TO_DT and review_date > DATE_TO_DT:
@@ -94,7 +94,7 @@ def in_date_range(review_date) -> bool:
 
 
 # ──────────────────────────────────────────────
-# SETUP BROWSER
+# BROWSER SETUP
 # ──────────────────────────────────────────────
 
 def get_driver():
@@ -117,16 +117,16 @@ def get_driver():
 
 
 # ──────────────────────────────────────────────
-# FUNZIONI DI SUPPORTO
+# HELPER FUNCTIONS
 # ──────────────────────────────────────────────
 
 def random_sleep():
     if random.random() < 0.15:
         t = random.uniform(15, 30)
-        print(f"  ⏱ Pausa lunga {t:.0f}s...")
+        print(f"  ⏱ Long pause {t:.0f}s...")
     else:
         t = random.uniform(SLEEP_MIN, SLEEP_MAX)
-        print(f"  ⏱ Attesa {t:.1f}s...")
+        print(f"  ⏱ Waiting {t:.1f}s...")
     elapsed = 0
     while elapsed < t:
         chunk = random.uniform(0.3, 1.5)
@@ -150,7 +150,7 @@ def scroll_page(driver, scrolls=3):
 
 
 def dismiss_cookie_banner(driver):
-    """Chiude il banner cookie se presente."""
+    """Closes the cookie banner if present."""
     selectors = [
         "button#onetrust-accept-btn-handler",
         "button[data-gdpr-consent='accept']",
@@ -161,7 +161,7 @@ def dismiss_cookie_banner(driver):
         try:
             btn = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.CSS_SELECTOR, sel)))
             driver.execute_script("arguments[0].click();", btn)
-            print("  🍪 Banner cookie chiuso.")
+            print("  🍪 Cookie banner dismissed.")
             time.sleep(1)
             return
         except TimeoutException:
@@ -174,7 +174,7 @@ def save_to_csv(data: list, city: str, source: str):
     filename = f"{OUTPUT_DIR}{source}_{city}_{date_range}.csv"
 
     if not data:
-        print("  ⚠️  Nessun dato da salvare.")
+        print("  ⚠️  No data to save.")
         return
 
     keys = data[0].keys()
@@ -183,7 +183,7 @@ def save_to_csv(data: list, city: str, source: str):
         writer.writeheader()
         writer.writerows(data)
 
-    print(f"  ✅ Salvate {len(data)} recensioni in: {filename}")
+    print(f"  ✅ Saved {len(data)} reviews to: {filename}")
 
 
 def checkpoint_path(city: str) -> str:
@@ -208,11 +208,11 @@ def clear_checkpoint(city: str):
 
 
 # ──────────────────────────────────────────────
-# STEP 1 – RACCOGLI LINK STRUTTURE
+# STEP 1 – COLLECT PROPERTY LINKS
 # ──────────────────────────────────────────────
 
 def _collect_links_from_page(driver, links: list, max_properties: int) -> int:
-    """Raccoglie i link dalle card visibili nella pagina corrente, restituisce il numero di nuovi link."""
+    """Collects links from property cards visible on the current page; returns the number of new links found."""
     soup = BeautifulSoup(driver.page_source, "html.parser")
     found = 0
     cards = soup.find_all("div", {"data-testid": "property-card"})
@@ -245,10 +245,10 @@ def _collect_links_from_page(driver, links: list, max_properties: int) -> int:
 
 def get_property_links(driver, search_url: str, max_properties: int) -> list:
     """
-    Apre la pagina dei risultati di ricerca Booking e raccoglie
-    i link alle singole strutture cliccando 'Carica più risultati'.
+    Opens the Booking search results page and collects links to individual
+    properties by clicking 'Load more results'.
     """
-    print(f"\n🔎 Caricamento risultati di ricerca...")
+    print(f"\n🔎 Loading search results...")
     driver.get(search_url)
     time.sleep(random.uniform(5, 10))
     dismiss_cookie_banner(driver)
@@ -259,12 +259,12 @@ def get_property_links(driver, search_url: str, max_properties: int) -> list:
 
     while len(links) < max_properties:
         found = _collect_links_from_page(driver, links, max_properties)
-        print(f"  → pagina {page_num}: {found} nuove strutture (totale: {len(links)})")
+        print(f"  → page {page_num}: {found} new properties (total: {len(links)})")
 
         if len(links) >= max_properties:
             break
 
-        # Cerca il bottone "Carica più risultati" tramite testo
+        # Look for the "Load more results" button by text
         try:
             load_more = WebDriverWait(driver, 8).until(
                 EC.element_to_be_clickable((By.XPATH, "//button[normalize-space()='Carica più risultati']"))
@@ -272,37 +272,37 @@ def get_property_links(driver, search_url: str, max_properties: int) -> list:
             driver.execute_script("arguments[0].scrollIntoView(true);", load_more)
             time.sleep(1)
             driver.execute_script("arguments[0].click();", load_more)
-            print(f"  🔄 'Carica più risultati' cliccato")
+            print(f"  🔄 'Load more results' clicked")
             time.sleep(random.uniform(4, 7))
             scroll_page(driver, scrolls=3)
             page_num += 1
         except TimeoutException:
-            print("  ⏹ Bottone 'Carica più risultati' non trovato, fine risultati.")
+            print("  ⏹ 'Load more results' button not found, end of results.")
             break
 
-    print(f"\n  ✅ Totale strutture raccolte: {len(links)}")
+    print(f"\n  ✅ Total properties collected: {len(links)}")
     return links
 
 
 # ──────────────────────────────────────────────
-# STEP 2 – ESTRAI RECENSIONI DA UNA STRUTTURA
+# STEP 2 – EXTRACT REVIEWS FROM A PROPERTY
 # ──────────────────────────────────────────────
 
 def scrape_property_reviews(driver, property_url: str, city: str, max_pages: int) -> list:
-    """Visita la pagina della struttura, clicca sulle recensioni ed estrae i dati."""
-    # Nome struttura dall'URL
+    """Visits the property page, clicks on the reviews tab and extracts review data."""
+    # Property name from URL
     try:
         property_name = property_url.split("/hotel/it/")[1].split(".it.html")[0].replace("-", " ").title()
     except (IndexError, AttributeError):
         property_name = "unknown"
 
-    print(f"\n  🏨 Struttura: {property_name}")
+    print(f"\n  🏨 Property: {property_name}")
     driver.get(property_url)
     time.sleep(random.uniform(5, 10))
     dismiss_cookie_banner(driver)
     scroll_page(driver, scrolls=2)
 
-    # Stelle/categoria struttura (estratte una volta dalla pagina property)
+    # Property stars/category (extracted once from the property page)
     property_stars = ""
     try:
         prop_soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -321,30 +321,30 @@ def scrape_property_reviews(driver, property_url: str, city: str, max_pages: int
                 property_stars = len(icons) if icons else ""
     except Exception:
         pass
-    print(f"    ⭐ Stelle struttura: {property_stars or 'N/A'}")
+    print(f"    ⭐ Property stars: {property_stars or 'N/A'}")
 
-    # Clicca il tab "Recensioni" nella navigazione della struttura
+    # Click the "Reviews" tab in the property navigation
     try:
         tab = WebDriverWait(driver, 8).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='Property-Header-Nav-Tab-Trigger-reviews']"))
         )
         driver.execute_script("arguments[0].click();", tab)
-        print("    ✅ Tab recensioni cliccato")
+        print("    ✅ Reviews tab clicked")
         time.sleep(random.uniform(3, 5))
     except TimeoutException:
-        print("    ⚠️  Tab recensioni non trovato, continuo sulla pagina corrente")
+        print("    ⚠️  Reviews tab not found, continuing on current page")
 
     all_reviews = []
 
     for page_num in range(max_pages):
-        print(f"    📄 Pagina recensioni {page_num + 1}/{max_pages}")
+        print(f"    📄 Review page {page_num + 1}/{max_pages}")
         print(f"    🌐 URL: {driver.current_url[:100]}")
         scroll_page(driver, scrolls=2)
         soup = BeautifulSoup(driver.page_source, "html.parser")
 
-        # Debug: mostra il titolo della pagina
+        # Debug: show page title
         title_tag = soup.find("title")
-        print(f"    📋 Titolo pagina: {title_tag.get_text(strip=True)[:80] if title_tag else 'N/A'}")
+        print(f"    📋 Page title: {title_tag.get_text(strip=True)[:80] if title_tag else 'N/A'}")
 
         review_blocks = (
             soup.find_all(attrs={"data-testid": "review-card"}) or
@@ -359,9 +359,9 @@ def scrape_property_reviews(driver, property_url: str, city: str, max_pages: int
             os.makedirs("data/raw", exist_ok=True)
             with open(debug_path, "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
-            print(f"    🛠 Nessun blocco trovato — HTML salvato in: {debug_path}")
+            print(f"    🛠 No review blocks found — HTML saved to: {debug_path}")
 
-        print(f"      → {len(review_blocks)} recensioni trovate")
+        print(f"      → {len(review_blocks)} reviews found")
 
         stop_early = False
         for block in review_blocks:
@@ -370,17 +370,17 @@ def scrape_property_reviews(driver, property_url: str, city: str, max_pages: int
                 continue
             rd = parse_review_date(review["review_date"])
             if DATE_FROM_DT and rd and rd < DATE_FROM_DT:
-                # Booking ordina dal più recente: tutto ciò che segue è fuori range
+                # Booking sorts from most recent: everything below is out of range
                 stop_early = True
                 break
             if in_date_range(rd):
                 all_reviews.append(review)
 
         if stop_early:
-            print(f"    ⏹ Recensioni più vecchie di {DATE_FROM} — paginazione interrotta.")
+            print(f"    ⏹ Reviews older than {DATE_FROM} — pagination stopped.")
             break
 
-        # Pagina successiva
+        # Next page
         try:
             next_btn = driver.find_element(By.CSS_SELECTOR, "button[aria-label='pagina successiva']")
             if not next_btn.is_enabled():
@@ -393,14 +393,14 @@ def scrape_property_reviews(driver, property_url: str, city: str, max_pages: int
                 next_btn.click()
                 random_sleep()
             except NoSuchElementException:
-                print("    ⏹ Fine paginazione.")
+                print("    ⏹ End of pagination.")
                 break
 
     return all_reviews
 
 
 def extract_booking_review(block, city: str, property_name: str, property_stars="") -> dict:
-    """Estrae i campi da un singolo blocco recensione Booking."""
+    """Extracts fields from a single Booking review block."""
     try:
         pos_el = (
             block.find(attrs={"data-testid": "review-positive-text"}) or
@@ -412,16 +412,16 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
         neg_el = block.find(attrs={"data-testid": "review-negative-text"})
         text_negative = neg_el.get_text(strip=True).strip("«»").strip() if neg_el else ""
 
-        text = text_positive  # mantenuto per retrocompatibilità col controllo `if not text` sotto
+        text = text_positive  # kept for backward compatibility with the `if not text` check below
 
-        # Titolo recensione
+        # Review title
         title_el = (
             block.find(attrs={"data-testid": "review-title"}) or
             block.find(attrs={"data-testid": "featuredreview-title"})
         )
         review_title = title_el.get_text(strip=True).strip("«»").strip() if title_el else ""
 
-        # Rating numerico (es. "8,5" o "8.5")
+        # Numeric rating (e.g. "8,5" or "8.5")
         rating = ""
         score_el = (
             block.find(attrs={"data-testid": "review-score"}) or
@@ -436,7 +436,7 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
                 val = float(m.group())
                 rating = val if val <= 10 else round(val / 10, 2)
 
-        # Nome recensore
+        # Reviewer name
         avatar_el = block.find(attrs={"data-testid": "review-avatar"}) or \
                     block.find(attrs={"data-testid": "featuredreview-avatar"})
         reviewer = ""
@@ -444,11 +444,11 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
             name_div = avatar_el.find("div", class_=lambda c: c and "b08850ce41" in c if c else False)
             reviewer = name_div.get_text(strip=True) if name_div else ""
 
-        # Paese recensore
+        # Reviewer country
         country_el = block.find("img", alt=True, src=lambda s: s and "images-flags" in s if s else False)
         country = country_el["alt"] if country_el else ""
 
-        # Tipo di soggiorno (es. "Coppia", "Famiglia", "Solo", "Business")
+        # Stay type (e.g. "Coppia", "Famiglia", "Solo", "Business")
         stay_type = ""
         stay_el = (
             block.find(attrs={"data-testid": "review-traveler-type"}) or
@@ -457,7 +457,7 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
         if stay_el:
             stay_type = stay_el.get_text(strip=True)
         else:
-            # Fallback: cerca testo con parole chiave tipiche di Booking
+            # Fallback: look for text matching typical Booking stay-type keywords
             for el in block.find_all(["span", "div", "p"]):
                 txt = el.get_text(strip=True)
                 if txt in ("Coppia", "Solo", "Famiglia con bambini piccoli",
@@ -465,7 +465,7 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
                     stay_type = txt
                     break
 
-        # Numero di notti
+        # Number of nights
         nights_stayed = ""
         import re as _re
         nights_el = block.find(attrs={"data-testid": "review-num-nights"})
@@ -481,7 +481,7 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
                     nights_stayed = int(m.group(1))
                     break
 
-        # Data recensione: review-card espone "Data della recensione: 20 maggio 2026"
+        # Review date: review-card exposes "Data della recensione: 20 maggio 2026"
         date_raw = ""
         date_el = block.find(attrs={"data-testid": "review-date"})
         if date_el:
@@ -512,7 +512,7 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
         }
 
     except Exception as e:
-        print(f"      ⚠️  Errore parsing recensione: {e}")
+        print(f"      ⚠️  Error parsing review: {e}")
         return None
 
 
@@ -521,30 +521,30 @@ def extract_booking_review(block, city: str, property_name: str, property_stars=
 # ──────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print(f"📅 Range date: {DATE_FROM or '∞'} → {DATE_TO or '∞'}")
+    print(f"📅 Date range: {DATE_FROM or '∞'} → {DATE_TO or '∞'}")
     for city, search_url in SEARCH_URLS.items():
         done = load_checkpoint(city)
         if done:
-            print(f"♻️  Checkpoint trovato: {len(done)} strutture già processate, riprendo da lì.")
+            print(f"♻️  Checkpoint found: {len(done)} properties already processed, resuming.")
 
         driver = get_driver()
         all_reviews = []
 
-        # Carica recensioni già salvate se si riprende da checkpoint
+        # Load already saved reviews if resuming from checkpoint
         date_range = f"{DATE_FROM or 'start'}_to_{DATE_TO or 'end'}"
         csv_file = f"{OUTPUT_DIR}booking_{city}_{date_range}.csv"
         if done and os.path.exists(csv_file):
             import csv as _csv
             with open(csv_file, "r", encoding="utf-8") as f:
                 all_reviews = list(_csv.DictReader(f))
-            print(f"  📂 Caricate {len(all_reviews)} recensioni già salvate.")
+            print(f"  📂 Loaded {len(all_reviews)} previously saved reviews.")
 
         try:
             property_links = get_property_links(driver, search_url, MAX_PROPERTIES)
             to_process = [u for u in property_links if u not in done]
             skipped = len(property_links) - len(to_process)
             if skipped:
-                print(f"  ⏭ Saltate {skipped} strutture già processate.")
+                print(f"  ⏭ Skipped {skipped} already processed properties.")
 
             for i, prop_url in enumerate(to_process):
                 print(f"\n[{i+1}/{len(to_process)}] {prop_url[:80]}...")
@@ -553,8 +553,8 @@ if __name__ == "__main__":
                     all_reviews.extend(reviews)
                     save_to_csv(all_reviews, city=city, source="booking")
                 except Exception as e:
-                    print(f"  ⚠️  Struttura saltata per errore: {e}")
-                    # Se il driver è morto, ne creiamo uno nuovo
+                    print(f"  ⚠️  Property skipped due to error: {e}")
+                    # If the driver crashed, create a new one
                     try:
                         driver.quit()
                     except Exception:
@@ -565,12 +565,12 @@ if __name__ == "__main__":
                 random_sleep()
 
         except Exception as e:
-            print(f"❌ Errore generale: {e}")
+            print(f"❌ General error: {e}")
         finally:
             driver.quit()
 
         save_to_csv(all_reviews, city=city, source="booking")
         clear_checkpoint(city)
-        print(f"\n📊 Totale recensioni raccolte per {city}: {len(all_reviews)}")
+        print(f"\n📊 Total reviews collected for {city}: {len(all_reviews)}")
 
-    print("\n🏁 Scraping completato.")
+    print("\n🏁 Scraping complete.")

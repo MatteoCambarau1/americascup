@@ -1,97 +1,97 @@
 # 🏆 America's Cup Cagliari – Tourist Impact Analysis
 
-> Analisi dell'impatto turistico dell'America's Cup 2026 a Cagliari attraverso text mining, topic modeling e sentiment analysis su dati estratti da piattaforme online.
+> Analysis of the tourist impact of the America's Cup 2026 in Cagliari through text mining, topic modeling and sentiment analysis on data extracted from online platforms.
 
 ---
 
-## 📋 Descrizione del Progetto
+## 📋 Project Description
 
-Il progetto mira a misurare e quantificare l'impatto dell'**America's Cup 2026** sul turismo a Cagliari, analizzando recensioni e contenuti testuali estratti da piattaforme online in tre finestre temporali distinte. I risultati vengono confrontati con la baseline dell'anno precedente e con una città di controllo (**Olbia**).
-
----
-
-## 🗓️ Finestre Temporali
-
-| Fase               | Periodo                          |
-|--------------------|----------------------------------|
-| Pre-evento         | 1 aprile – 20 maggio 2026        |
-| Durante evento     | 21 maggio – 24 maggio 2026       |
-| Post-evento        | 25 maggio – 15 giugno 2026       |
-| Baseline 2025      | Stesse finestre, anno precedente (solo Cagliari) |
-| Città di controllo | Olbia (stessa finestra 2026, nessun evento) |
+This project aims to measure and quantify the impact of the **America's Cup 2026** on tourism in Cagliari, by analyzing reviews and textual content extracted from online platforms across three distinct temporal windows. Results are compared against the previous year's baseline and a control city (**Olbia**).
 
 ---
 
-## 🌐 Fonti Dati
+## 🗓️ Temporal Windows
 
-- **Booking.com** – recensioni alloggi (scraper Selenium)
+| Phase              | Period                                   |
+|--------------------|------------------------------------------|
+| Pre-event          | April 1 – May 20, 2026                  |
+| During event       | May 21 – May 24, 2026                   |
+| Post-event         | May 25 – June 15, 2026                  |
+| 2025 Baseline      | Same windows, previous year (Cagliari only) |
+| Control city       | Olbia (same 2026 window, no event)      |
 
 ---
 
-## 📂 Struttura del Repository
+## 🌐 Data Sources
+
+- **Booking.com** – accommodation reviews (Selenium scraper)
+
+---
+
+## 📂 Repository Structure
 
 ```
 project/
 │
-├── booking_scraper_cagliari.py   # Scraper Booking.com per Cagliari
-├── booking_scraper_olbia.py      # Scraper Booking.com per Olbia
+├── booking_scraper_cagliari.py   # Booking.com scraper for Cagliari
+├── booking_scraper_olbia.py      # Booking.com scraper for Olbia
 │
 ├── data/
-│   ├── raw/                      # CSV grezzi estratti dagli scraper (dati 2026 e baseline 2025)
-│   └── processed/                # CSV processati dalla pipeline
+│   ├── raw/                      # Raw CSVs extracted by scrapers (2026 + 2025 baseline)
+│   └── processed/                # Processed CSVs from the pipeline
 │
 ├── analysis/
-│   ├── config.py                 # Finestre temporali, città, path cartelle
-│   ├── utils.py                  # Parsing date italiane, assegnazione finestre
-│   ├── preprocessing.py          # Pulizia testo, lemmatizzazione, feature engineering
+│   ├── config.py                 # Temporal windows, cities, folder paths
+│   ├── utils.py                  # Italian date parsing, window assignment
+│   ├── preprocessing.py          # Text cleaning, lemmatization, feature engineering
 │   ├── sentiment_analysis.py     # Sentiment & Emotion Analysis (nlptown / Feel-IT emotion / DistilRoBERTa)
 │   ├── topic_modeling.py         # LDA + BERTopic, GridSearch, pyLDAvis, WordCloud
-│   ├── comparative.py            # Analisi comparativa finale, summary report
-│   ├── exploratory.py            # Analisi temporale descrittiva (box plot, 2026 vs 2025)
-│   ├── validation.py             # Validazione modelli NLP su benchmark esterni — ESEGUITA
-│   ├── generate_gold_standard.py # Genera il gold standard per la validazione in-domain
-│   ├── empirical_validation.py   # Valida Feel-IT vs nlptown sul gold standard annotato
-│   └── patches/                  # Fix tokenizer Feel-IT (transformers 5.x)
+│   ├── comparative.py            # Final comparative analysis, summary report
+│   ├── exploratory.py            # Descriptive temporal analysis (box plots, 2026 vs 2025)
+│   ├── validation.py             # NLP model validation on external benchmarks — COMPLETED
+│   ├── generate_gold_standard.py # Generates the gold standard for in-domain validation
+│   ├── empirical_validation.py   # Validates Feel-IT vs nlptown on annotated gold standard
+│   └── patches/                  # Feel-IT tokenizer fix (transformers 5.x)
 │
 ├── validation/
-│   ├── gold_standard_da_annotare.csv   # Template generato da generate_gold_standard.py
-│   ├── gold_standard_annotato.csv      # Gold standard con annotazioni manuali (150 rec.)
-│   ├── gold_standard_annotato.xlsx     # Versione Excel leggibile del gold standard
-│   └── outputs/                        # Confusion matrix, classification report, confronto modelli
+│   ├── gold_standard_da_annotare.csv   # Template generated by generate_gold_standard.py
+│   ├── gold_standard_annotato.csv      # Gold standard with manual annotations (150 reviews)
+│   ├── gold_standard_annotato.xlsx     # Excel-readable version of the gold standard
+│   └── outputs/                        # Confusion matrix, classification report, model comparison
 │
-├── results/                      # Output grafici, aggregazioni, report
+├── results/                      # Charts, aggregations, report outputs
 │
 ├── scripts/
-│   ├── create_presentation.js    # Genera results/presentazione.pptx con pptxgenjs (Node.js)
-│   └── rezip.py                  # Utility post-generazione PPTX
+│   ├── create_presentation.js    # Generates results/presentazione.pptx via pptxgenjs (Node.js)
+│   └── rezip.py                  # Post-generation PPTX utility
 │
-├── report_tecnico.md             # Report tecnico completo (fonte canonica)
-├── report_tecnico.docx           # Report tecnico in formato Word
-├── report_tecnico.pdf            # Report tecnico in formato PDF
-├── CLAUDE.md                     # Contesto progetto per Claude Code
+├── report_tecnico.md             # Full technical report (canonical source)
+├── report_tecnico.docx           # Technical report in Word format
+├── report_tecnico.pdf            # Technical report in PDF format
+├── CLAUDE.md                     # Project context for Claude Code
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## ⚙️ Setup & Installazione
+## ⚙️ Setup & Installation
 
-### Prerequisiti
+### Prerequisites
 - Python 3.9+
-- Google Chrome + ChromeDriver (per Selenium)
+- Google Chrome + ChromeDriver (for Selenium)
 
-### Installazione
+### Installation
 
 ```bash
-git clone https://github.com/your-username/americas-cup-cagliari
-cd americas-cup-cagliari
+git clone https://github.com/MatteoCambarau1/americascup.git
+cd americascup
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Dipendenze principali
+### Main Dependencies
 
 ```txt
 selenium
@@ -116,60 +116,60 @@ seaborn
 
 ---
 
-## 🚀 Utilizzo
+## 🚀 Usage
 
-### 1. Eseguire gli scraper
+### 1. Run the scrapers
 
 ```bash
 python booking_scraper_cagliari.py
 python booking_scraper_olbia.py
 ```
 
-> ⚠️ **Nota**: Modificare `DATE_FROM` e `DATE_TO` nello script per cambiare il range di raccolta. Gli scraper supportano il checkpoint automatico: se interrotti, riprendono dalla struttura successiva.
+> ⚠️ **Note**: Modify `DATE_FROM` and `DATE_TO` in the script to change the collection range. Scrapers support automatic checkpointing: if interrupted, they resume from the next property.
 
-### 2. Validazione modelli NLP (eseguita)
+### 2. NLP Model Validation (already completed)
 
 ```bash
 python -m analysis.validation
-python -m analysis.validation --max-samples 50   # test rapido
+python -m analysis.validation --max-samples 50   # quick test
 ```
 
-> ℹ️ Due validazioni sono state eseguite per il report:
-> - **In-domain** (sezione 9): `analysis/empirical_validation.py` confronta Feel-IT vs
->   `nlptown` su 150 recensioni annotate manualmente. Risultato: nlptown accuracy 96%
->   vs Feel-IT 58% → nlptown adottato come modello principale.
-> - **Esterna** (sezione 9.4): `analysis/validation.py` valida nlptown su
->   `mteb/tweet_sentiment_multilingual` (IT: acc 65.2%, EN: acc 70.4%) e Feel-IT emotion
->   su `dair-ai/emotion` (proxy EN, risultati non conclusivi per mismatch di dominio).
+> ℹ️ Two validation runs were performed for the report:
+> - **In-domain** (section 9): `analysis/empirical_validation.py` compares Feel-IT vs
+>   `nlptown` on 150 manually annotated reviews. Result: nlptown accuracy 96%
+>   vs Feel-IT 58% → nlptown adopted as the main model.
+> - **External** (section 9.4): `analysis/validation.py` validates nlptown on
+>   `mteb/tweet_sentiment_multilingual` (IT: acc 65.2%, EN: acc 70.4%) and Feel-IT emotion
+>   on `dair-ai/emotion` (EN proxy, inconclusive due to domain mismatch).
 
 ### 3. Preprocessing
 
 ```bash
 python -m analysis.preprocessing
-python -m analysis.preprocessing --sample 100   # test rapido
+python -m analysis.preprocessing --sample 100   # quick test
 ```
 
 ### 4. Sentiment & Emotion Analysis
 
 ```bash
 python -m analysis.sentiment_analysis
-python -m analysis.sentiment_analysis --sample 100   # test rapido
+python -m analysis.sentiment_analysis --sample 100   # quick test
 ```
 
 ### 5. Topic Modeling
 
 ```bash
 python -m analysis.topic_modeling
-python -m analysis.topic_modeling --sample 200 --no-gridsearch   # test rapido
+python -m analysis.topic_modeling --sample 200 --no-gridsearch   # quick test
 ```
 
-### 6. Analisi Comparativa
+### 6. Comparative Analysis
 
 ```bash
 python -m analysis.comparative
 ```
 
-### 7. Analisi Temporale Descrittiva
+### 7. Descriptive Temporal Analysis
 
 ```bash
 python -m analysis.exploratory
@@ -177,73 +177,68 @@ python -m analysis.exploratory
 
 ---
 
-## 🔧 Pipeline Completa
+## 🔧 Full Pipeline
 
 ```
-Fase 1: Estrazione Dati
+Phase 1: Data Extraction
     ├── booking_scraper_cagliari.py
     └── booking_scraper_olbia.py
 
-Fase 2: Validazione Modelli (eseguita)
+Phase 2: Model Validation (completed)
     └── analysis/validation.py
 
-Fase 3: Preprocessing
+Phase 3: Preprocessing
     └── analysis/preprocessing.py
 
-Fase 4: Analisi NLP
+Phase 4: NLP Analysis
     ├── analysis/sentiment_analysis.py   (nlptown / Feel-IT emotion / DistilRoBERTa)
     └── analysis/topic_modeling.py       (LDA + BERTopic)
 
-Fase 5: Analisi Comparativa
+Phase 5: Comparative Analysis
     └── analysis/comparative.py
 
-Fase 6: Analisi Temporale Descrittiva
+Phase 6: Descriptive Temporal Analysis
     └── analysis/exploratory.py
 ```
 
 ---
 
-## 📊 Output Attesi
+## 📊 Expected Outputs
 
-- **Distribuzione dei topic** per finestra temporale e città
-- **Sentiment score medio** per finestra temporale (2026 vs baseline 2025)
-- **Emozioni prevalenti** per periodo (gioia, tristezza, rabbia, paura, ecc.)
-- **Variazione volumetrica** delle recensioni rispetto al 2025
-- **Confronto Cagliari vs Olbia** per stesso periodo
-- **Visualizzazioni**: pyLDAvis interattivo, WordCloud, confusion matrix, log-likelihood curves
+- **Topic distribution** by temporal window and city
+- **Average sentiment score** by temporal window (2026 vs 2025 baseline)
+- **Prevalent emotions** by period (joy, sadness, anger, fear, etc.)
+- **Volumetric variation** of reviews compared to 2025
+- **Cagliari vs Olbia comparison** for the same period
+- **Visualizations**: interactive pyLDAvis, WordCloud, confusion matrix, log-likelihood curves
 
-## 📝 Deliverable Finali
+## 📝 Final Deliverables
 
-- **`report_tecnico.md` / `report_tecnico.docx` / `report_tecnico.pdf`** – report tecnico completo (Executive Summary + Indice + 12 sezioni) con metodologia, risultati, validazione e conclusioni
-- **`results/presentazione.pdf`** – presentazione d'esame in formato PDF (15 slide)
-
----
-
-## 🧪 Analisi Aggiuntive (Opzionali)
-
-- Validazione esterna su benchmark pubblici (`analysis/validation.py`) — eseguita, risultati in sezione 9.4 del report
-- Integrazione con interviste sul campo (pre/post evento) per validazione
-
-> **Nota**: PCA, K-Means e SVM sono state escluse dal progetto — lo sbilanciamento
-> delle classi temporali (pre ≈93k / during ≈6k / post ≈10k) rendeva la
-> classificazione non interpretabile (vedi `CLAUDE.md`).
-
-> **Nota — Baseline Olbia 2025**: i dati Olbia 2025 non sono stati raccolti per scelta
-> progettuale deliberata. Il confronto con Olbia è esclusivamente sincronico (stessa
-> finestra temporale 2026, città diverse), non longitudinale. La baseline longitudinale
-> (2026 vs 2025) è disponibile solo per Cagliari.
+- **`report_tecnico.md` / `report_tecnico.docx` / `report_tecnico.pdf`** – full technical report (Executive Summary + Index + 12 sections) with methodology, results, validation and conclusions
+- **`results/presentazione.pdf`** – exam presentation in PDF format (15 slides)
 
 ---
 
-## 👤 Autore
+## 🧪 Additional Analyses (Optional)
 
-Progetto universitario Matteo Cambarau – Esame di Web Analytics e Analisi Testuale
+- External validation on public benchmarks (`analysis/validation.py`) — completed, results in section 9.4 of the report
+- Integration with field interviews (pre/post event) for further validation
+
+> **Note**: PCA, K-Means and SVM were excluded from the project — the temporal class imbalance (pre ≈93k / during ≈6k / post ≈10k) made classification results uninterpretable (see `CLAUDE.md`).
+
+> **Note — Olbia 2025 Baseline**: Olbia 2025 data was deliberately not collected. The comparison with Olbia is exclusively synchronic (same 2026 temporal window, different cities), not longitudinal. The longitudinal baseline (2026 vs 2025) is available for Cagliari only.
+
+---
+
+## 👤 Author
+
+University project by Matteo Cambarau – Web Analytics and Text Analysis Exam
 
 Supervisor: *Professor Marco Ortu*  
-Anno Accademico: 2025/2026
+Academic Year: 2025/2026
 
 ---
 
-## 📄 Licenza
+## 📄 License
 
-Questo progetto è sviluppato a scopo accademico. I dati estratti sono utilizzati esclusivamente per ricerca e non vengono redistribuiti.
+This project was developed for academic purposes. Extracted data is used solely for research and is not redistributed.
